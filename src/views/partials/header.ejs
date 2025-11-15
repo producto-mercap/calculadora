@@ -1,7 +1,29 @@
 <header class="top-header">
-    <div style="display: flex; align-items: center; gap: 12px;">
+    <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
         <img src="/images/logo.png" alt="Logo Mercap" style="height: 28px; width: auto; display: block;" onerror="this.style.display='none';" />
         <span style="font-size: 16px; font-weight: 500; color: var(--text-secondary); font-family: 'Google Sans', 'Roboto', sans-serif;">Calculadora TIR</span>
     </div>
+    
+    <!-- Tabs de navegación -->
+    <nav class="header-tabs">
+        <a href="/calculadora-cer" class="header-tab <%= activeMenu === 'calculadora-cer' ? 'active' : '' %>">
+            <span>Calculadora CER</span>
+        </a>
+        <a href="/calculadora-variable" class="header-tab <%= activeMenu === 'calculadora-variable' ? 'active' : '' %>">
+            <span>Calculadora Variable</span>
+        </a>
+        <a href="/cer" class="header-tab <%= activeMenu === 'cer' ? 'active' : '' %>">
+            <span>CER</span>
+        </a>
+        <a href="/tamar" class="header-tab <%= activeMenu === 'tamar' ? 'active' : '' %>">
+            <span>TAMAR</span>
+        </a>
+        <a href="/badlar" class="header-tab <%= activeMenu === 'badlar' ? 'active' : '' %>">
+            <span>BADLAR</span>
+        </a>
+        <a href="/feriados" class="header-tab <%= activeMenu === 'feriados' ? 'active' : '' %>">
+            <span>Feriados</span>
+        </a>
+    </nav>
 </header>
 

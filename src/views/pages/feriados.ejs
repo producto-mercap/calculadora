@@ -10,17 +10,49 @@
     <%- include('../partials/header') %>
     
     <div class="app-container">
-        <%- include('../partials/sidebar') %>
-        
         <main class="main-content">
             <div class="content-area">
-                <h1 class="page-title">Feriados</h1>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h1 class="page-title" style="margin: 0;">Feriados</h1>
+                    
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <label style="font-size: 14px; color: var(--text-secondary);">Desde:</label>
+                            <input type="date" class="input" id="fechaDesdeFeriados" style="width: 150px;" />
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <label style="font-size: 14px; color: var(--text-secondary);">Hasta:</label>
+                            <input type="date" class="input" id="fechaHastaFeriados" style="width: 150px;" />
+                        </div>
+                        <button class="btn btn-primary" onclick="cargarFeriados().catch(console.error)" id="btnCargarFeriados">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                            </svg>
+                            <span>Cargar Feriados</span>
+                        </button>
+                    </div>
+                </div>
                 
-                <div class="card">
-                    <div class="empty-state">
+                <div class="card" id="cardFeriados">
+                    <div id="feriadosEmptyState" class="empty-state">
                         <div class="empty-state-icon">📅</div>
                         <div class="empty-state-text">Calendario de Feriados</div>
-                        <div class="empty-state-subtext">Esta funcionalidad consumirá la API pública de feriados</div>
+                        <div class="empty-state-subtext">Seleccione un rango de fechas y haga clic en "Cargar Feriados" para obtener los datos</div>
+                    </div>
+                    
+                    <div id="feriadosTableContainer" style="display: none;">
+                        <div style="overflow-x: auto;">
+                            <table class="cashflow-table" id="feriadosTable">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Nombre</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="feriadosTableBody">
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -28,6 +60,6 @@
     </div>
 
     <script src="/js/main.js"></script>
+    <script src="/js/feriados.js"></script>
 </body>
 </html>
-

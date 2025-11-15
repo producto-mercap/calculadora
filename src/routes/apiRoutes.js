@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const bcraService = require('../services/bcraService');
 const feriadosService = require('../services/feriadosService');
+const calculadoraController = require('../controllers/calculadoraController');
 
 // Obtener datos de CER
 router.get('/cer', async (req, res) => {
@@ -85,7 +86,7 @@ router.get('/badlar', async (req, res) => {
     }
 });
 
-// Obtener feriados
+// Obtener feriados de un año específico
 router.get('/feriados/:anio', async (req, res) => {
     try {
         const { anio } = req.params;
@@ -111,6 +112,36 @@ router.get('/feriados/:anio', async (req, res) => {
         });
     }
 });
+
+// Obtener feriados en un rango de fechas
+router.get('/feriados', async (req, res) => {
+    try {
+        const { desde, hasta } = req.query;
+
+        if (!desde || !hasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parámetros "desde" y "hasta" son requeridos'
+            });
+        }
+
+        const datos = await feriadosService.obtenerFeriadosRango(desde, hasta);
+
+        res.json({
+            success: true,
+            datos
+        });
+    } catch (error) {
+        console.error('Error en API Feriados Rango:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Guardar calculadora
+router.post('/calculadora/guardar', calculadoraController.guardarCalculadora);
 
 module.exports = router;
 

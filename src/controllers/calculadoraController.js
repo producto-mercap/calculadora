@@ -133,6 +133,54 @@ const calcularTIR = async (req, res) => {
     }
 };
 
+// Guardar calculadora
+const guardarCalculadora = async (req, res) => {
+    try {
+        const datos = req.body;
+
+        // Validar datos mínimos
+        if (!datos.datosPartida && !datos.datosEspecie) {
+            return res.status(400).json({
+                success: false,
+                error: 'Debe proporcionar al menos datos de Partida o Especie'
+            });
+        }
+
+        // TODO: Cuando se configure la BD, aquí se guardará en la base de datos
+        // Por ahora, solo retornamos éxito simulado
+        // 
+        // Ejemplo de estructura para cuando se implemente:
+        // const pool = require('../config/database');
+        // const result = await pool.query(
+        //     'INSERT INTO calculadoras (datos, tipo, fecha_creacion) VALUES ($1, $2, $3) RETURNING id',
+        //     [JSON.stringify(datos), datos.tipo, new Date()]
+        // );
+        // const id = result.rows[0].id;
+
+        // Simular guardado exitoso
+        const idSimulado = Date.now(); // ID temporal hasta que se configure BD
+
+        console.log('Datos recibidos para guardar:', {
+            tipo: datos.tipo,
+            esCopia: datos.esCopia || false,
+            ticker: datos.datosEspecie?.ticker,
+            fechaCreacion: datos.fechaCreacion
+        });
+
+        res.json({
+            success: true,
+            id: idSimulado,
+            message: datos.esCopia ? 'Copia guardada exitosamente' : 'Calculadora guardada exitosamente'
+        });
+    } catch (error) {
+        console.error('Error al guardar calculadora:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al guardar la calculadora'
+        });
+    }
+};
+
 module.exports = {
     renderCalculadoraCER,
     renderCalculadoraVariable,
@@ -140,6 +188,7 @@ module.exports = {
     renderTAMAR,
     renderBADLAR,
     renderFeriados,
-    calcularTIR
+    calcularTIR,
+    guardarCalculadora
 };
 

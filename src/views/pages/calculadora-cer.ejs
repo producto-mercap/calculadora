@@ -10,11 +10,25 @@
     <%- include('../partials/header') %>
     
     <div class="app-container">
-        <%- include('../partials/sidebar') %>
-        
         <main class="main-content">
             <div class="content-area">
-                <h1 class="page-title">Calculadora CER - TIR de Bonos</h1>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h1 class="page-title" style="margin: 0;">Calculadora CER - TIR de Bonos</h1>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn" onclick="guardarCalculadora(false)" id="btnGuardar">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+                            </svg>
+                            <span>Guardar</span>
+                        </button>
+                        <button class="btn" onclick="guardarCalculadora(true)" id="btnGuardarCopia">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                            </svg>
+                            <span>Guardar Copia</span>
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Panel de Cashflow (Tabla de cupones) -->
                 <div class="card" style="margin-bottom: 24px;">
@@ -35,7 +49,8 @@
                                 <tr>
                                     <th>Fecha Inicio</th>
                                     <th>Fecha Liquidación</th>
-                                    <th>Fecha Coeficiente</th>
+                                    <th>Inicio Intervalo</th>
+                                    <th>Final</th>
                                     <th>Valor CER</th>
                                     <th>Day Count Factor</th>
                                     <th>Amortización</th>
@@ -57,7 +72,8 @@
                                 <tr class="inversion-row" data-tipo="inversion">
                                     <td><input type="date" class="input-table" disabled /></td>
                                     <td><input type="date" class="input-table" id="fechaLiquidacion" /></td>
-                                    <td><input type="date" class="input-table" id="fechaCoeficiente" /></td>
+                                    <td><input type="date" class="input-table" disabled /></td>
+                                    <td><input type="date" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" id="valorCER" step="0.0001" /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
@@ -143,6 +159,51 @@
                             <div class="form-group">
                                 <label class="form-label">Spread</label>
                                 <input type="number" class="input" id="spread" step="0.01" placeholder="%" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Periodicidad</label>
+                                <select class="input" id="periodicidad">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="mensual">Mensual</option>
+                                    <option value="bimestral">Bimestral</option>
+                                    <option value="trimestral">Trimestral</option>
+                                    <option value="semestral">Semestral</option>
+                                    <option value="anual">Anual</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Fecha Primera Renta</label>
+                                <input type="date" class="input" id="fechaPrimeraRenta" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Fecha Amortización</label>
+                                <input type="date" class="input" id="fechaAmortizacion" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Intervalo Inicio/Fin (días)</label>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Inicio</label>
+                                        <input type="number" class="input" id="intervaloInicio" step="1" placeholder="Ej: -10" />
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Fin</label>
+                                        <input type="number" class="input" id="intervaloFin" step="1" placeholder="Ej: -10" />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group" style="margin-top: 24px;">
+                                <button class="btn btn-primary" onclick="autocompletarCupones().catch(console.error)" style="width: 100%;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                                    </svg>
+                                    <span>Autocompletar Cupones</span>
+                                </button>
                             </div>
                         </div>
                         
