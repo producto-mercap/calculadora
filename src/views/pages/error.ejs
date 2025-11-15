@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <%- include('../partials/header') %>
+    
+    <div class="app-container">
+        <%- include('../partials/sidebar') %>
+        
+        <main class="main-content">
+            <div class="content-area">
+                <div class="card">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <div class="empty-state-text">Error</div>
+                        <div class="empty-state-subtext"><%= error || 'Ha ocurrido un error inesperado' %></div>
+                        <a href="/" class="btn btn-primary" style="margin-top: 24px; text-decoration: none;">
+                            Volver al inicio
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/main.js"></script>
+</body>
+</html>
+

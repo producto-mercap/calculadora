@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <%- include('../partials/header') %>
+    
+    <div class="app-container">
+        <%- include('../partials/sidebar') %>
+        
+        <main class="main-content">
+            <div class="content-area">
+                <h1 class="page-title">Calculadora CER - TIR de Bonos</h1>
+                
+                <!-- Panel de Cashflow (Tabla de cupones) -->
+                <div class="card" style="margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="font-size: 20px; font-weight: 500; margin: 0;">Cashflow - Cupones</h2>
+                        <button class="btn btn-primary" onclick="agregarCupon()" id="btnAgregarCupon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                            <span>Agregar Cupón</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Tabla de cashflow -->
+                    <div style="overflow-x: auto;">
+                        <table class="cashflow-table" id="cashflowTable">
+                            <thead>
+                                <tr>
+                                    <th>Fecha Inicio</th>
+                                    <th>Fecha Liquidación</th>
+                                    <th>Fecha Coeficiente</th>
+                                    <th>Valor CER</th>
+                                    <th>Day Count Factor</th>
+                                    <th>Amortización</th>
+                                    <th>Valor Residual</th>
+                                    <th>Amortización Ajustada</th>
+                                    <th>Renta Nominal</th>
+                                    <th>Renta TNA</th>
+                                    <th>Renta Ajustada</th>
+                                    <th>Factor Actualización</th>
+                                    <th>Pagos Actualizados</th>
+                                    <th>Flujos</th>
+                                    <th>Flujos Desc. Fecha Compra</th>
+                                    <th>Flujos Desc. a Hoy</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cashflowBody">
+                                <!-- Fila de inversión inicial -->
+                                <tr class="inversion-row" data-tipo="inversion">
+                                    <td><input type="date" class="input-table" disabled /></td>
+                                    <td><input type="date" class="input-table" id="fechaLiquidacion" /></td>
+                                    <td><input type="date" class="input-table" id="fechaCoeficiente" /></td>
+                                    <td><input type="number" class="input-table" id="valorCER" step="0.0001" /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" id="flujos" /></td>
+                                    <td><input type="number" class="input-table" id="flujosDescFechaCompra" /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td>
+                                        <span style="color: var(--text-secondary); font-size: 12px;">Inversión</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Footer con botón calcular y resultado -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border-color);">
+                        <button class="btn btn-primary" onclick="calcularTIR()" id="btnCalcularTIR" style="min-width: 150px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                            </svg>
+                            <span>Calcular TIR</span>
+                        </button>
+                        
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 16px; font-weight: 500; color: var(--text-secondary);">TIR:</span>
+                            <div id="resultadoTIR" style="font-size: 24px; font-weight: 600; color: var(--primary-color); min-width: 100px; text-align: right;">
+                                -
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Contenedor de paneles inferiores -->
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; margin-bottom: 24px;">
+                    <!-- Panel izquierdo: Datos de Partida y Especie -->
+                    <div>
+                        <!-- Datos de Partida -->
+                        <div class="card" style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Datos Partida</h3>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Fecha Compra</label>
+                                <input type="date" class="input" id="fechaCompra" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Precio Compra</label>
+                                <input type="number" class="input" id="precioCompra" step="0.01" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Cantidad Partida</label>
+                                <input type="number" class="input" id="cantidadPartida" step="1" />
+                            </div>
+                        </div>
+                        
+                        <!-- Datos de Especie -->
+                        <div class="card" style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Datos Especie</h3>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Ticker</label>
+                                <input type="text" class="input" id="ticker" placeholder="Ej: TX26" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Fecha Emisión</label>
+                                <input type="date" class="input" id="fechaEmision" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Tipo Interés (días)</label>
+                                <input type="number" class="input" id="tipoInteresDias" step="1" placeholder="Ej: 360" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Spread</label>
+                                <input type="number" class="input" id="spread" step="0.01" placeholder="%" />
+                            </div>
+                        </div>
+                        
+                        <!-- Resultados -->
+                        <div class="card">
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Resultados</h3>
+                            
+                            <div class="resultado-item">
+                                <span class="resultado-label">Pagos Efect. Actualizados</span>
+                                <span class="resultado-valor" id="pagosEfectActualizados">-</span>
+                            </div>
+                            
+                            <div class="resultado-item">
+                                <span class="resultado-label">Precio C+T Hoy Ajustado</span>
+                                <span class="resultado-valor" id="precioCTHoyAjustado">-</span>
+                            </div>
+                            
+                            <div class="resultado-item">
+                                <span class="resultado-label">Precio C+T Ajust - Pagos</span>
+                                <span class="resultado-valor" id="precioCTAjustPagos">-</span>
+                            </div>
+                            
+                            <div class="resultado-item">
+                                <span class="resultado-label">Precio Flujos Descontados</span>
+                                <span class="resultado-valor" id="precioFlujosDescontados">-</span>
+                            </div>
+                            
+                            <div class="resultado-item">
+                                <span class="resultado-label">Precio Técnico Vencimiento</span>
+                                <span class="resultado-valor" id="precioTecnicoVencimiento">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Panel derecho: Tira de Precios -->
+                    <div class="card">
+                        <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Tira de Precios</h3>
+                        
+                        <div style="overflow-x: auto;">
+                            <table class="tira-precios-table" id="tiraPreciosTable">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Precio C+T</th>
+                                        <th>Precio C+T Ajustado</th>
+                                        <th>Pagos Efect. Act. a Hoy</th>
+                                        <th>Precio C+T Ajust - Pagos Act.</th>
+                                        <th>Revaluo C+T</th>
+                                        <th>Revaluo de Ajuste (ADC)</th>
+                                        <th>Diferencia Rev Ajuste</th>
+                                        <th>Revaluo C+T + Dif Ajuste</th>
+                                        <th>Valuación</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tiraPreciosBody">
+                                    <tr>
+                                        <td colspan="10" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                                            Calcule la TIR para ver la tira de precios
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/main.js"></script>
+    <script src="/js/calculadora-cer.js"></script>
+</body>
+</html>
+
