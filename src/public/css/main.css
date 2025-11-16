@@ -506,6 +506,28 @@ select.input {
     background-color: #e8e8e8;
 }
 
+/* Columnas autocompletadas con fondo gris */
+.cashflow-table th.autocomplete-column,
+.cashflow-table td.autocomplete-column {
+    background-color: #f5f5f5;
+}
+
+/* Estilos para intervalos ajustados (cuando son mayores que fecha valuación) */
+.intervalo-ajustado {
+    color: #9aa0a6 !important;
+    font-style: italic;
+}
+
+.cashflow-table tr:hover td.autocomplete-column {
+    background-color: #e8e8e8;
+}
+
+/* Campos de intervalo ajustados (cuando se recalculan desde fecha valuación) */
+.intervalo-ajustado {
+    color: #7b8a8b !important;
+    font-style: italic;
+}
+
 /* Columnas de flujos con fondo verde suave */
 .cashflow-table th.flujos-column,
 .cashflow-table td.flujos-column {
@@ -572,7 +594,7 @@ select.input {
 }
 
 .inversion-row {
-    background: #fef7e0;
+    background: rgba(255, 152, 0, 0.15); /* Naranja con opacidad */
 }
 
 /* Resultados */

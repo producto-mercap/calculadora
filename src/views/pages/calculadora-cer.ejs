@@ -15,7 +15,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h1 class="page-title" style="margin: 0;">Calculadora CER</h1>
                     <div style="display: flex; gap: 12px;">
-                        <a href="#" class="chr-link chr-link--button-secondary" onclick="event.preventDefault(); abrirModalCargar();" id="btnCargar">
+                        <a href="#" class="chr-link chr-link--button-secondary" id="btnCargar">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                             </svg>
@@ -33,7 +33,7 @@
                 <!-- Panel de Cashflow (Tabla de cupones) -->
                 <div class="card" style="margin-bottom: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h2 style="font-size: 20px; font-weight: 500; margin: 0;">Cashflow - Cupones</h2>
+                        <h2 style="font-size: 20px; font-weight: 500; margin: 0; color: #e65100;">Cashflow - Cupones</h2>
                         <a href="#" class="chr-link chr-link--button-secondary" onclick="event.preventDefault(); agregarCupon();" id="btnAgregarCupon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -42,49 +42,76 @@
                         </a>
                     </div>
                     
+                    <!-- Fecha Valuación -->
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px; background: #f8f9fa; border-radius: 8px; flex-wrap: wrap;">
+                        <label for="fechaValuacion" style="font-size: 14px; font-weight: 500; color: var(--text-primary); min-width: 120px;">Fecha Valuación:</label>
+                        <div style="position: relative; display: inline-block;">
+                            <input type="text" class="input date-input" id="fechaValuacion" style="width: 150px; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                            <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaValuacion')" title="Seleccionar fecha">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                </svg>
+                            </button>
+                            <div id="datePickerFechaValuacion" class="date-picker-popup" style="display: none;"></div>
+                        </div>
+                        <input type="number" class="input" id="valorCERValuacion" step="0.0001" readonly style="width: 150px; background: #f1f3f4;" placeholder="Se autocompleta" />
+                        <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+                            <div class="resultado-item-horizontal" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f1f3f4; border-radius: 4px;">
+                                <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">Coef. CER Emisión:</span>
+                                <span id="coeficienteCEREmision" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">-</span>
+                            </div>
+                            <div class="resultado-item-horizontal" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f1f3f4; border-radius: 4px;">
+                                <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">Coef. CER Compra:</span>
+                                <span id="coeficienteCERCompra" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Tabla de cashflow -->
                     <div style="overflow-x: auto;">
                         <table class="cashflow-table" id="cashflowTable">
                             <thead>
                                 <tr>
-                                    <th>Fecha<br>Inicio</th>
-                                    <th>Fecha<br>Liquid.</th>
-                                    <th>Inicio<br>Intervalo</th>
-                                    <th>Final<br>Intervalo</th>
-                                    <th class="cer-column">Valor CER<br>Inicio</th>
-                                    <th class="cer-column">Valor CER<br>Final</th>
-                                    <th>Day Count<br>Factor</th>
-                                    <th>Amortiz.</th>
-                                    <th>Valor<br>Residual</th>
-                                    <th>Amortiz.<br>Ajustada</th>
-                                    <th>Renta<br>Nominal</th>
-                                    <th>Renta<br>TNA</th>
-                                    <th>Renta<br>Ajustada</th>
-                                    <th>Factor<br>Actualiz.</th>
-                                    <th>Pagos<br>Actualiz.</th>
-                                    <th class="flujos-column">Flujos</th>
-                                    <th class="flujos-column">Flujos Desc.<br>F. Compra</th>
+                                    <th style="width: 60px; min-width: 60px;">Cupón</th>
+                                    <th title="Fecha de inicio del cupón">Fecha<br>Inicio</th>
+                                    <th title="Fecha de liquidación del cupón">Fecha<br>Liquid.</th>
+                                    <th class="autocomplete-column" title="Fecha inicio - 10 días hábiles">Inicio<br>Intervalo</th>
+                                    <th class="autocomplete-column" title="Fecha liquidación - intervalo fin días hábiles">Final<br>Intervalo</th>
+                                    <th class="cer-column autocomplete-column" title="Valor CER correspondiente a la fecha de inicio intervalo">Valor CER<br>Inicio</th>
+                                    <th class="cer-column autocomplete-column" title="Valor CER correspondiente a la fecha de final intervalo">Valor CER<br>Final</th>
+                                    <th class="autocomplete-column" title="Fracción año cupón (según base de días)">Day Count<br>Factor</th>
+                                    <th title="Input partida">Amortiz.</th>
+                                    <th title="Valor residual del cupón (inicia en 100, se reduce con amortizaciones)">Valor<br>Residual</th>
+                                    <th title="Amortización × Coeficiente CER emisión">Amortiz.<br>Ajustada</th>
+                                    <th title="Renta TNA × Day Count Factor">Renta<br>Nominal</th>
+                                    <th title="Input partida">Renta<br>TNA</th>
+                                    <th title="Renta Nominal × Coeficiente CER emisión × (Valor Residual / 100)">Renta<br>Ajustada</th>
+                                    <th title="Factor de actualización">Factor<br>Actualiz.</th>
+                                    <th title="Pagos actualizados">Pagos<br>Actualiz.</th>
+                                    <th class="flujos-column" title="Inversión: -(Cantidad × Precio × Coef CER Compra) | Cupones: Cantidad × (Amortiz ajustada/100 + Renta ajustada/100)">Flujos</th>
+                                    <th class="flujos-column" title="Flujo / (1 + TIR) ^ (Fracción año)">Flujos Desc.<br>F. Compra</th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="cashflowBody">
                                 <!-- Fila de inversión inicial -->
                                 <tr class="inversion-row" data-tipo="inversion">
+                                    <td style="text-align: center; font-weight: 600; color: var(--text-secondary);">-</td>
                                     <td>
                                         <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>
                                     <td>
                                         <input type="text" class="input-table date-input" id="fechaLiquidacion" placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>
-                                    <td>
+                                    <td class="autocomplete-column">
                                         <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>
-                                    <td>
+                                    <td class="autocomplete-column">
                                         <input type="text" class="input-table date-input" id="fechaFinalIntervaloInversion" readonly placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>
-                                    <td class="cer-column"><input type="number" class="input-table" id="valorCER" step="0.0001" readonly /></td>
-                                    <td class="cer-column"><input type="number" class="input-table" id="valorCERFinal" step="0.0001" readonly /></td>
-                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td class="cer-column autocomplete-column"><input type="number" class="input-table" id="valorCER" step="0.0001" readonly /></td>
+                                    <td class="cer-column autocomplete-column"><input type="number" class="input-table" id="valorCERFinal" step="0.0001" readonly /></td>
+                                    <td class="autocomplete-column"><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
@@ -102,9 +129,9 @@
                             </tbody>
                             <tfoot id="cashflowFooter" style="display: none;">
                                 <tr style="background: #f8f9fa; font-weight: 600;">
-                                    <td colspan="17" style="text-align: right; padding: 12px 24px; border-top: 2px solid var(--border-color);">
-                                        <span style="color: var(--text-secondary); margin-right: 12px;">Sumatoria:</span>
-                                        <span id="sumatoriaFlujosDesc" style="color: var(--text-primary); font-size: 16px;">0.00000000</span>
+                                    <td colspan="18" style="text-align: right; padding: 12px 24px; border-top: 2px solid var(--border-color);">
+                                        <span style="color: var(--text-secondary); margin-right: 12px; font-size: 12px;">Sumatoria flujos Desc.:</span>
+                                        <span id="sumatoriaFlujosDesc" style="color: var(--text-primary); font-size: 12px;">0.00000000</span>
                                     </td>
                                 </tr>
                             </tfoot>
@@ -121,16 +148,6 @@
                                 <span>Calcular TIR</span>
                             </button>
                             
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">Coef. CER Emisión:</span>
-                                    <span id="coeficienteCEREmision" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">-</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">Coef. CER Compra:</span>
-                                    <span id="coeficienteCERCompra" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">-</span>
-                                </div>
-                            </div>
                         </div>
                         
                         <div style="display: flex; align-items: center; gap: 12px;">
@@ -148,7 +165,7 @@
                     <div>
                         <!-- Datos de Partida -->
                         <div class="card" style="margin-bottom: 24px;">
-                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Datos Partida</h3>
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: #e65100;">Datos Partida</h3>
                             
                             <div class="form-group">
                                 <label class="form-label">Fecha Compra</label>
@@ -176,7 +193,7 @@
                         
                         <!-- Datos de Especie -->
                         <div class="card" style="margin-bottom: 24px;">
-                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Datos Especie</h3>
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: #e65100;">Datos Especie</h3>
                             
                             <div class="form-group">
                                 <label class="form-label">Ticker</label>
@@ -185,19 +202,21 @@
                             
                             <div class="form-group">
                                 <label class="form-label">Fecha Emisión</label>
-                                <div style="position: relative; display: inline-block; width: 100%;">
-                                    <input type="text" class="input date-input" id="fechaEmision" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
-                                    <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaEmision')" title="Seleccionar fecha">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
-                                        </svg>
-                                    </button>
-                                    <div id="datePickerFechaEmision" class="date-picker-popup" style="display: none;"></div>
+                                <div style="display: flex; gap: 8px; align-items: flex-end;">
+                                    <div style="position: relative; display: inline-block; flex: 1;">
+                                        <input type="text" class="input date-input" id="fechaEmision" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                        <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaEmision')" title="Seleccionar fecha">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                            </svg>
+                                        </button>
+                                        <div id="datePickerFechaEmision" class="date-picker-popup" style="display: none;"></div>
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <label class="form-label" style="font-size: 12px; margin-bottom: 4px;">Valor CER Emisión</label>
+                                        <input type="number" class="input" id="valorCEREmision" step="0.0001" readonly style="width: 100%;" placeholder="Se autocompleta" />
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Valor CER Emisión</label>
-                                <input type="number" class="input" id="valorCEREmision" step="0.0001" readonly style="width: 100%;" placeholder="Se autocompleta con fecha de emisión" />
                             </div>
                             
                             <div class="form-group">
@@ -211,11 +230,6 @@
                             </div>
                             
                             <div class="form-group">
-                                <label class="form-label">Spread</label>
-                                <input type="number" class="input" id="spread" step="0.01" placeholder="%" />
-                            </div>
-                            
-                            <div class="form-group">
                                 <label class="form-label">Periodicidad</label>
                                 <select class="input" id="periodicidad">
                                     <option value="">Seleccionar...</option>
@@ -225,6 +239,11 @@
                                     <option value="semestral">Semestral</option>
                                     <option value="anual">Anual</option>
                                 </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Renta TNA</label>
+                                <input type="text" class="input" id="rentaTNA" placeholder="Ej: 0.05" />
                             </div>
                             
                             <div class="form-group">
@@ -268,12 +287,12 @@
                             </div>
                             
                             <div class="form-group" style="margin-top: 24px;">
-                                <button class="btn btn-primary" onclick="autocompletarCupones()" style="width: 100%;">
+                                <a href="#" class="glue-button glue-button--high-emphasis" onclick="event.preventDefault(); autocompletarCupones();" style="width: 100%; display: flex; justify-content: center;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                                     </svg>
                                     <span>Autocompletar Cupones</span>
-                                </button>
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -282,7 +301,7 @@
                     <div>
                         <!-- Resultados -->
                         <div class="card" style="margin-bottom: 24px;">
-                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Resultados</h3>
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: #1e8e3e;">Resultados</h3>
                             
                             <div style="display: flex; flex-wrap: nowrap; gap: 12px; overflow-x: auto;">
                                 <div class="resultado-item-horizontal">

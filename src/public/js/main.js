@@ -413,6 +413,7 @@ function seleccionarFecha(año, mes, dia) {
     if (input) {
         input.value = fechaFormateada;
         input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
     }
     
     // Cerrar popup

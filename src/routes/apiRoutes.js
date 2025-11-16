@@ -164,6 +164,9 @@ router.get('/calculadora/listar', calculadoraController.listarCalculadoras);
 // Obtener una calculadora específica
 router.get('/calculadora/:titulo', calculadoraController.obtenerCalculadora);
 
+// Eliminar una calculadora
+router.delete('/calculadora/:titulo', calculadoraController.eliminarCalculadora);
+
 // Verificar y obtener CER desde BD
 router.get('/cer/verificar', calculadoraController.verificarCER);
 router.get('/cer/bd', calculadoraController.obtenerCERBD);

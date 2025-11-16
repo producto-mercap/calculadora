@@ -312,17 +312,16 @@ const guardarCalculadora = async (req, res) => {
                 // AT TIME ZONE 'America/Argentina/Buenos_Aires' la convierte a hora de Argentina
                 await pool.query(
                     `INSERT INTO especies (
-                        titulo, ticker, fecha_emision, tipo_interes_dias, spread, 
+                        titulo, ticker, fecha_emision, tipo_interes_dias, 
                         periodicidad, fecha_primera_renta, fecha_amortizacion, 
                         intervalo_inicio, intervalo_fin, fecha_creacion, fecha_actualizacion
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 
                         (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone,
                         (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone)
                     ON CONFLICT (titulo) DO UPDATE SET
                         ticker = EXCLUDED.ticker,
                         fecha_emision = EXCLUDED.fecha_emision,
                         tipo_interes_dias = EXCLUDED.tipo_interes_dias,
-                        spread = EXCLUDED.spread,
                         periodicidad = EXCLUDED.periodicidad,
                         fecha_primera_renta = EXCLUDED.fecha_primera_renta,
                         fecha_amortizacion = EXCLUDED.fecha_amortizacion,
@@ -334,8 +333,6 @@ const guardarCalculadora = async (req, res) => {
                         datosEspecie.ticker || null,
                         datosEspecie.fechaEmision || null,
                         datosEspecie.tipoInteresDias || 360,
-                        // Truncar a 8 decimales antes de guardar
-                        datosEspecie.spread ? parseFloat(parseFloat(datosEspecie.spread).toFixed(8)) : 0,
                         datosEspecie.periodicidad || null,
                         datosEspecie.fechaPrimeraRenta || null,
                         datosEspecie.fechaAmortizacion || null,
@@ -1040,6 +1037,63 @@ const obtenerCalculadora = async (req, res) => {
     }
 };
 
+// Eliminar calculadora
+const eliminarCalculadora = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada'
+            });
+        }
+
+        const { titulo } = req.params;
+
+        if (!titulo) {
+            return res.status(400).json({
+                success: false,
+                error: 'Título es requerido'
+            });
+        }
+
+        // Iniciar transacción
+        await pool.query('BEGIN');
+
+        try {
+            // Eliminar cashflow
+            await pool.query('DELETE FROM cashflow WHERE titulo = $1', [titulo]);
+            
+            // Eliminar especie
+            await pool.query('DELETE FROM especies WHERE titulo = $1', [titulo]);
+            
+            // Eliminar partida
+            await pool.query('DELETE FROM partidas WHERE titulo = $1', [titulo]);
+
+            // Confirmar transacción
+            await pool.query('COMMIT');
+
+            res.json({
+                success: true,
+                message: `Calculadora "${titulo}" eliminada exitosamente`
+            });
+
+        } catch (error) {
+            // Revertir transacción en caso de error
+            await pool.query('ROLLBACK');
+            throw error;
+        }
+
+    } catch (error) {
+        console.error('Error al eliminar calculadora:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al eliminar calculadora'
+        });
+    }
+};
+
 module.exports = {
     renderCalculadoraCER,
     renderCalculadoraVariable,
@@ -1051,6 +1105,7 @@ module.exports = {
     guardarCalculadora,
     listarCalculadoras,
     obtenerCalculadora,
+    eliminarCalculadora,
     verificarCER,
     obtenerCERBD,
     obtenerFechasExistentesCER,
