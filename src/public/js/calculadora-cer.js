@@ -922,8 +922,8 @@ function recopilarDatosCalculadora() {
     return datos;
 }
 
-// Guardar calculadora (guardar o guardar copia)
-async function guardarCalculadora(esCopia = false) {
+// Guardar calculadora
+async function guardarCalculadora() {
     try {
         // Recopilar todos los datos
         const datos = recopilarDatosCalculadora();
@@ -934,16 +934,19 @@ async function guardarCalculadora(esCopia = false) {
             return;
         }
         
-        // Si es copia, agregar indicador
-        if (esCopia) {
-            datos.esCopia = true;
-            datos.nombre = datos.datosEspecie.ticker 
-                ? `${datos.datosEspecie.ticker} - Copia ${new Date().toLocaleString()}`
-                : `Calculadora - Copia ${new Date().toLocaleString()}`;
+        // Pedir título al usuario
+        const titulo = prompt('Ingrese un título para la calculadora:');
+        
+        if (!titulo || titulo.trim() === '') {
+            showError('El título es requerido');
+            return;
         }
         
+        // Agregar título a los datos
+        datos.titulo = titulo.trim();
+        
         // Mostrar indicador de carga
-        const btnGuardar = document.getElementById(esCopia ? 'btnGuardarCopia' : 'btnGuardar');
+        const btnGuardar = document.getElementById('btnGuardar');
         const textoOriginal = btnGuardar.innerHTML;
         btnGuardar.disabled = true;
         btnGuardar.innerHTML = '<span>Guardando...</span>';
@@ -964,13 +967,7 @@ async function guardarCalculadora(esCopia = false) {
         btnGuardar.innerHTML = textoOriginal;
         
         if (result.success) {
-            showSuccess(esCopia ? 'Copia guardada exitosamente' : 'Calculadora guardada exitosamente');
-            
-            // Si no es copia y hay un ID, guardarlo para futuras actualizaciones
-            if (!esCopia && result.id) {
-                // Guardar ID en un atributo del botón para futuras actualizaciones
-                btnGuardar.setAttribute('data-calculadora-id', result.id);
-            }
+            showSuccess('Calculadora guardada exitosamente');
         } else {
             showError(result.error || 'Error al guardar la calculadora');
         }
@@ -980,7 +977,7 @@ async function guardarCalculadora(esCopia = false) {
         showError('Error al guardar: ' + error.message);
         
         // Restaurar botón en caso de error
-        const btnGuardar = document.getElementById(esCopia ? 'btnGuardarCopia' : 'btnGuardar');
+        const btnGuardar = document.getElementById('btnGuardar');
         if (btnGuardar) {
             btnGuardar.disabled = false;
         }

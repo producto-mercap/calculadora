@@ -18,11 +18,27 @@
                     <div style="display: flex; gap: 12px; align-items: center;">
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <label style="font-size: 14px; color: var(--text-secondary);">Desde:</label>
-                            <input type="date" class="input" id="fechaDesdeCER" style="width: 150px;" />
+                            <div style="position: relative; display: inline-block;">
+                                <input type="text" class="input date-input" id="fechaDesdeCER" style="width: 150px; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaDesdeCER')" title="Seleccionar fecha">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                    </svg>
+                                </button>
+                                <div id="datePickerDesdeCER" class="date-picker-popup" style="display: none;"></div>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <label style="font-size: 14px; color: var(--text-secondary);">Hasta:</label>
-                            <input type="date" class="input" id="fechaHastaCER" style="width: 150px;" />
+                            <div style="position: relative; display: inline-block;">
+                                <input type="text" class="input date-input" id="fechaHastaCER" style="width: 150px; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaHastaCER')" title="Seleccionar fecha">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                    </svg>
+                                </button>
+                                <div id="datePickerHastaCER" class="date-picker-popup" style="display: none;"></div>
+                            </div>
                         </div>
                         <button class="btn btn-primary" onclick="cargarCER().catch(console.error)" id="btnCargarCER">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -34,27 +50,104 @@
                 </div>
                 
                 <div class="card" id="cardCER">
-                    <div id="cerEmptyState" class="empty-state">
-                        <div class="empty-state-icon">📊</div>
-                        <div class="empty-state-text">Datos de CER desde BCRA</div>
-                        <div class="empty-state-subtext">Seleccione un rango de fechas y haga clic en "Cargar CER" para obtener los datos</div>
-                    </div>
-                    
-                    <div id="cerTableContainer" style="display: none;">
-                        <div style="overflow-x: auto;">
-                            <table class="cashflow-table" id="cerTable">
-                                <thead>
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Valor CER</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="cerTableBody">
-                                </tbody>
-                            </table>
+                    <% if (datos && datos.length > 0) { %>
+                        <div id="cerTableContainer">
+                            <div style="overflow-x: auto;">
+                                <table class="cashflow-table" id="cerTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Valor CER</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cerTableBody">
+                                        <% 
+                                        function formatearFechaEJS(fecha) {
+                                            if (!fecha) return '';
+                                            // Si es un objeto Date
+                                            if (fecha instanceof Date) {
+                                                const day = String(fecha.getDate()).padStart(2, '0');
+                                                const month = String(fecha.getMonth() + 1).padStart(2, '0');
+                                                const year = fecha.getFullYear();
+                                                return `${day}/${month}/${year}`;
+                                            }
+                                            // Si es un string en formato YYYY-MM-DD
+                                            if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}/.test(fecha)) {
+                                                const partes = fecha.split('T')[0].split('-');
+                                                return `${partes[2]}/${partes[1]}/${partes[0]}`;
+                                            }
+                                            return fecha;
+                                        }
+                                        %>
+                                        <% datos.forEach(item => { %>
+                                            <tr>
+                                                <td><%= formatearFechaEJS(item.fecha) %></td>
+                                                <td><%= typeof item.valor === 'number' ? item.valor.toFixed(4) : item.valor %></td>
+                                            </tr>
+                                        <% }); %>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Controles de paginación -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                                <div style="font-size: 14px; color: var(--text-secondary);">
+                                    Mostrando <%= ((pagina - 1) * porPagina) + 1 %> - <%= Math.min(pagina * porPagina, total) %> de <%= total %> registros
+                                </div>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <button class="btn" onclick="cambiarPaginaCER(<%= pagina - 1 %>)" <%= pagina <= 1 ? 'disabled' : '' %> style="<%= pagina <= 1 ? 'opacity: 0.5; cursor: not-allowed;' : '' %>">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                                        </svg>
+                                        <span>Anterior</span>
+                                    </button>
+                                    <div style="font-size: 14px; color: var(--text-primary); padding: 0 16px;">
+                                        Página <%= pagina %> de <%= totalPaginas || 1 %>
+                                    </div>
+                                    <button class="btn" onclick="cambiarPaginaCER(<%= pagina + 1 %>)" <%= pagina >= (totalPaginas || 1) ? 'disabled' : '' %> style="<%= pagina >= (totalPaginas || 1) ? 'opacity: 0.5; cursor: not-allowed;' : '' %>">
+                                        <span>Siguiente</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                        <div id="cerEmptyState" class="empty-state" style="display: none;">
+                            <div class="empty-state-icon">📊</div>
+                            <div class="empty-state-text">Datos de CER desde BCRA</div>
+                            <div class="empty-state-subtext">Seleccione un rango de fechas y haga clic en "Cargar CER" para obtener los datos</div>
+                        </div>
+                    <% } else { %>
+                        <div id="cerEmptyState" class="empty-state">
+                            <div class="empty-state-icon">📊</div>
+                            <div class="empty-state-text">Datos de CER desde BCRA</div>
+                            <div class="empty-state-subtext">No hay datos de CER en la base de datos. Seleccione un rango de fechas y haga clic en "Cargar CER" para obtener los datos</div>
+                        </div>
+                        <div id="cerTableContainer" style="display: none;">
+                            <div style="overflow-x: auto;">
+                                <table class="cashflow-table" id="cerTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Valor CER</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cerTableBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    <% } %>
                 </div>
+                
+                <script>
+                    // Variables globales para paginación
+                    window.cerPaginaActual = <%= pagina || 1 %>;
+                    window.cerTotalPaginas = <%= totalPaginas || 1 %>;
+                    window.cerTotal = <%= total || 0 %>;
+                    window.cerPorPagina = <%= porPagina || 50 %>;
+                </script>
             </div>
         </main>
     </div>

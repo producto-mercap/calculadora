@@ -1,5 +1,48 @@
 // Controller para la calculadora de TIR
 
+// Función para obtener timestamp en zona horaria de Argentina
+// Retorna el timestamp formateado como string para PostgreSQL
+function obtenerTimestampArgentina() {
+    const ahora = new Date();
+    
+    // Obtener la fecha/hora en zona horaria de Argentina usando toLocaleString
+    // Usar formato 'en-US' para obtener formato consistente MM/DD/YYYY, HH:MM:SS
+    const fechaArgentina = ahora.toLocaleString('en-US', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    
+    // Parsear la fecha formateada (formato: MM/DD/YYYY, HH:MM:SS)
+    // Ejemplo: "11/15/2025, 23:06:58"
+    const partes = fechaArgentina.split(', ');
+    const fechaPartes = partes[0].split('/'); // [MM, DD, YYYY]
+    const horaPartes = partes[1].split(':'); // [HH, MM, SS]
+    
+    const año = fechaPartes[2];
+    const mes = fechaPartes[0];
+    const dia = fechaPartes[1];
+    const horas = horaPartes[0];
+    const minutos = horaPartes[1];
+    const segundos = horaPartes[2];
+    
+    // Obtener milisegundos del objeto Date original
+    const milisegundos = String(ahora.getMilliseconds()).padStart(3, '0');
+    
+    // Formatear como timestamp de PostgreSQL: YYYY-MM-DD HH:MM:SS.mmm
+    const timestamp = `${año}-${mes}-${dia} ${horas}:${minutos}:${segundos}.${milisegundos}`;
+    
+    // Log para debug (remover en producción si es necesario)
+    console.log('🔍 Timestamp Argentina generado:', timestamp, '| UTC original:', ahora.toISOString());
+    
+    return timestamp;
+}
+
 // Renderizar página principal de calculadora CER
 const renderCalculadoraCER = async (req, res) => {
     try {
@@ -36,10 +79,44 @@ const renderCalculadoraVariable = async (req, res) => {
 
 // Renderizar página de CER
 const renderCER = async (req, res) => {
+    const pool = require('../config/database');
+    
     try {
+        let datos = [];
+        let total = 0;
+        let pagina = 1;
+        const porPagina = 50;
+
+        // Si hay pool configurado, cargar datos paginados
+        if (pool) {
+            try {
+                pagina = parseInt(req.query.pagina) || 1;
+                const offset = (pagina - 1) * porPagina;
+
+                // Obtener total de registros
+                const countResult = await pool.query('SELECT COUNT(*) as total FROM cer');
+                total = parseInt(countResult.rows[0].total);
+
+                // Obtener datos paginados
+                const result = await pool.query(
+                    'SELECT fecha, valor, id_variable as idVariable FROM cer ORDER BY fecha DESC LIMIT $1 OFFSET $2',
+                    [porPagina, offset]
+                );
+                datos = result.rows;
+            } catch (error) {
+                console.error('Error al cargar datos de CER:', error);
+                // Continuar sin datos si hay error
+            }
+        }
+
         res.render('pages/cer', {
             title: 'Tira CER',
-            activeMenu: 'cer'
+            activeMenu: 'cer',
+            datos: datos,
+            pagina: pagina,
+            total: total,
+            porPagina: porPagina,
+            totalPaginas: Math.ceil(total / porPagina)
         });
     } catch (error) {
         console.error('Error al renderizar CER:', error);
@@ -87,10 +164,44 @@ const renderBADLAR = async (req, res) => {
 
 // Renderizar página de Feriados
 const renderFeriados = async (req, res) => {
+    const pool = require('../config/database');
+    
     try {
+        let datos = [];
+        let total = 0;
+        let pagina = 1;
+        const porPagina = 50;
+
+        // Si hay pool configurado, cargar datos paginados
+        if (pool) {
+            try {
+                pagina = parseInt(req.query.pagina) || 1;
+                const offset = (pagina - 1) * porPagina;
+
+                // Obtener total de registros
+                const countResult = await pool.query('SELECT COUNT(*) as total FROM feriados');
+                total = parseInt(countResult.rows[0].total);
+
+                // Obtener datos paginados
+                const result = await pool.query(
+                    'SELECT fecha, nombre, tipo FROM feriados ORDER BY fecha ASC LIMIT $1 OFFSET $2',
+                    [porPagina, offset]
+                );
+                datos = result.rows;
+            } catch (error) {
+                console.error('Error al cargar datos de Feriados:', error);
+                // Continuar sin datos si hay error
+            }
+        }
+
         res.render('pages/feriados', {
             title: 'Feriados',
-            activeMenu: 'feriados'
+            activeMenu: 'feriados',
+            datos: datos,
+            pagina: pagina,
+            total: total,
+            porPagina: porPagina,
+            totalPaginas: Math.ceil(total / porPagina)
         });
     } catch (error) {
         console.error('Error al renderizar Feriados:', error);
@@ -135,48 +246,665 @@ const calcularTIR = async (req, res) => {
 
 // Guardar calculadora
 const guardarCalculadora = async (req, res) => {
+    const pool = require('../config/database');
+    
     try {
-        const datos = req.body;
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada. Configure DATABASE_URL en las variables de entorno con la URL real de Neon (no use valores placeholder).'
+            });
+        }
+        const { titulo, datosPartida, datosEspecie, cashflow } = req.body;
+
+        // Validar título
+        if (!titulo || titulo.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                error: 'El título es requerido'
+            });
+        }
 
         // Validar datos mínimos
-        if (!datos.datosPartida && !datos.datosEspecie) {
+        if (!datosPartida && !datosEspecie) {
             return res.status(400).json({
                 success: false,
                 error: 'Debe proporcionar al menos datos de Partida o Especie'
             });
         }
 
-        // TODO: Cuando se configure la BD, aquí se guardará en la base de datos
-        // Por ahora, solo retornamos éxito simulado
-        // 
-        // Ejemplo de estructura para cuando se implemente:
-        // const pool = require('../config/database');
-        // const result = await pool.query(
-        //     'INSERT INTO calculadoras (datos, tipo, fecha_creacion) VALUES ($1, $2, $3) RETURNING id',
-        //     [JSON.stringify(datos), datos.tipo, new Date()]
-        // );
-        // const id = result.rows[0].id;
+        // Validar que no exista el título
+        const existeEspecie = await pool.query(
+            'SELECT titulo FROM especies WHERE titulo = $1',
+            [titulo]
+        );
+        
+        const existePartida = await pool.query(
+            'SELECT titulo FROM partidas WHERE titulo = $1',
+            [titulo]
+        );
 
-        // Simular guardado exitoso
-        const idSimulado = Date.now(); // ID temporal hasta que se configure BD
+        if (existeEspecie.rows.length > 0 || existePartida.rows.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Ya existe una calculadora con ese título. Por favor elija otro nombre.'
+            });
+        }
 
-        console.log('Datos recibidos para guardar:', {
-            tipo: datos.tipo,
-            esCopia: datos.esCopia || false,
-            ticker: datos.datosEspecie?.ticker,
-            fechaCreacion: datos.fechaCreacion
-        });
+        // Iniciar transacción
+        await pool.query('BEGIN');
 
-        res.json({
-            success: true,
-            id: idSimulado,
-            message: datos.esCopia ? 'Copia guardada exitosamente' : 'Calculadora guardada exitosamente'
-        });
+        try {
+            // Guardar ESPECIE si hay datos
+            if (datosEspecie && datosEspecie.ticker) {
+                // Usar NOW() con conversión explícita a zona horaria de Argentina
+                // (NOW() AT TIME ZONE 'UTC') obtiene la hora UTC actual
+                // AT TIME ZONE 'America/Argentina/Buenos_Aires' la convierte a hora de Argentina
+                await pool.query(
+                    `INSERT INTO especies (
+                        titulo, ticker, fecha_emision, tipo_interes_dias, spread, 
+                        periodicidad, fecha_primera_renta, fecha_amortizacion, 
+                        intervalo_inicio, intervalo_fin, fecha_creacion, fecha_actualizacion
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
+                        (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone,
+                        (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone)
+                    ON CONFLICT (titulo) DO UPDATE SET
+                        ticker = EXCLUDED.ticker,
+                        fecha_emision = EXCLUDED.fecha_emision,
+                        tipo_interes_dias = EXCLUDED.tipo_interes_dias,
+                        spread = EXCLUDED.spread,
+                        periodicidad = EXCLUDED.periodicidad,
+                        fecha_primera_renta = EXCLUDED.fecha_primera_renta,
+                        fecha_amortizacion = EXCLUDED.fecha_amortizacion,
+                        intervalo_inicio = EXCLUDED.intervalo_inicio,
+                        intervalo_fin = EXCLUDED.intervalo_fin,
+                        fecha_actualizacion = (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone`,
+                    [
+                        titulo,
+                        datosEspecie.ticker || null,
+                        datosEspecie.fechaEmision || null,
+                        datosEspecie.tipoInteresDias || 360,
+                        datosEspecie.spread || 0,
+                        datosEspecie.periodicidad || null,
+                        datosEspecie.fechaPrimeraRenta || null,
+                        datosEspecie.fechaAmortizacion || null,
+                        datosEspecie.intervaloInicio || 0,
+                        datosEspecie.intervaloFin || 0
+                    ]
+                );
+
+                // Guardar CASHFLOW (cupones) si hay datos
+                if (cashflow && Array.isArray(cashflow)) {
+                    // Eliminar cashflow anterior para este título
+                    await pool.query(
+                        'DELETE FROM cashflow WHERE titulo = $1',
+                        [titulo]
+                    );
+
+                    // Insertar nuevos cupones (solo los que tienen fecha_inicio y fecha_liquidacion)
+                    for (const cupon of cashflow) {
+                        if (cupon.tipo === 'cupon' && cupon.fechaInicio && cupon.fechaLiquidacion) {
+                            await pool.query(
+                                `INSERT INTO cashflow (
+                                    titulo, fecha_inicio, fecha_liquidacion, 
+                                    amortizacion, renta_tna
+                                ) VALUES ($1, $2, $3, $4, $5)`,
+                                [
+                                    titulo,
+                                    cupon.fechaInicio || null,
+                                    cupon.fechaLiquidacion || null,
+                                    cupon.amortizacion || 0,
+                                    cupon.rentaTNA || 0
+                                ]
+                            );
+                        }
+                    }
+                }
+            }
+
+            // Guardar PARTIDA si hay datos
+            if (datosPartida && (datosPartida.fechaCompra || datosPartida.precioCompra || datosPartida.cantidadPartida)) {
+                // Usar NOW() con conversión explícita a zona horaria de Argentina
+                await pool.query(
+                    `INSERT INTO partidas (
+                        titulo, ticker, fecha_compra, precio_compra, cantidad_partida, fecha_creacion, fecha_actualizacion
+                    ) VALUES ($1, $2, $3, $4, $5, 
+                        (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone,
+                        (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone)
+                    ON CONFLICT (titulo) DO UPDATE SET
+                        ticker = EXCLUDED.ticker,
+                        fecha_compra = EXCLUDED.fecha_compra,
+                        precio_compra = EXCLUDED.precio_compra,
+                        cantidad_partida = EXCLUDED.cantidad_partida,
+                        fecha_actualizacion = (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone`,
+                    [
+                        titulo,
+                        datosEspecie?.ticker || datosPartida.ticker || null,
+                        datosPartida.fechaCompra || null,
+                        datosPartida.precioCompra || 0,
+                        datosPartida.cantidadPartida || 0
+                    ]
+                );
+            }
+
+            // Commit transacción
+            await pool.query('COMMIT');
+
+            res.json({
+                success: true,
+                titulo: titulo,
+                message: 'Calculadora guardada exitosamente'
+            });
+
+        } catch (error) {
+            // Rollback en caso de error
+            await pool.query('ROLLBACK');
+            throw error;
+        }
+
     } catch (error) {
         console.error('Error al guardar calculadora:', error);
         res.status(500).json({
             success: false,
-            error: 'Error al guardar la calculadora'
+            error: error.message || 'Error al guardar la calculadora'
+        });
+    }
+};
+
+// Verificar si existen datos de CER en BD
+const verificarCER = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.json({
+                success: true,
+                existen: false,
+                cantidad: 0
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (!desde || !hasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parámetros "desde" y "hasta" son requeridos'
+            });
+        }
+
+        const result = await pool.query(
+            'SELECT COUNT(*) as cantidad FROM cer WHERE fecha >= $1 AND fecha <= $2',
+            [desde, hasta]
+        );
+
+        const cantidad = parseInt(result.rows[0].cantidad);
+
+        res.json({
+            success: true,
+            existen: cantidad > 0,
+            cantidad: cantidad
+        });
+
+    } catch (error) {
+        console.error('Error al verificar CER:', error);
+        // Si hay error de conexión, asumir que no existen datos
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.json({
+                success: true,
+                existen: false,
+                cantidad: 0
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al verificar datos de CER'
+        });
+    }
+};
+
+// Obtener datos de CER desde BD (con paginación o por rango de fechas)
+const obtenerCERBD = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada. Configure DATABASE_URL en las variables de entorno.'
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        // Si se proporcionan desde y hasta, obtener por rango de fechas
+        if (desde && hasta) {
+            const result = await pool.query(
+                'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha DESC',
+                [desde, hasta]
+            );
+
+            return res.json({
+                success: true,
+                datos: result.rows
+            });
+        }
+
+        // Si no, usar paginación
+        const pagina = parseInt(req.query.pagina) || 1;
+        const porPagina = parseInt(req.query.porPagina) || 50;
+        const offset = (pagina - 1) * porPagina;
+
+        // Obtener total de registros
+        const countResult = await pool.query('SELECT COUNT(*) as total FROM cer');
+        const total = parseInt(countResult.rows[0].total);
+
+        // Obtener datos paginados
+        const result = await pool.query(
+            'SELECT fecha, valor, id_variable as idVariable FROM cer ORDER BY fecha DESC LIMIT $1 OFFSET $2',
+            [porPagina, offset]
+        );
+
+        res.json({
+            success: true,
+            datos: result.rows,
+            pagina: pagina,
+            porPagina: porPagina,
+            total: total,
+            totalPaginas: Math.ceil(total / porPagina)
+        });
+
+    } catch (error) {
+        console.error('Error al obtener CER de BD:', error);
+        // Si hay error de conexión, retornar error
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Error de conexión a la base de datos'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener datos de CER'
+        });
+    }
+};
+
+// Obtener fechas existentes de CER en un rango
+const obtenerFechasExistentesCER = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.json({
+                success: true,
+                fechas: []
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (!desde || !hasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parámetros "desde" y "hasta" son requeridos'
+            });
+        }
+
+        const result = await pool.query(
+            'SELECT fecha FROM cer WHERE fecha >= $1 AND fecha <= $2',
+            [desde, hasta]
+        );
+
+        const fechas = result.rows.map(row => row.fecha);
+
+        res.json({
+            success: true,
+            fechas: fechas
+        });
+
+    } catch (error) {
+        console.error('Error al obtener fechas existentes de CER:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.json({
+                success: true,
+                fechas: []
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener fechas existentes'
+        });
+    }
+};
+
+// Guardar datos de CER
+const guardarCER = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada. Configure DATABASE_URL en las variables de entorno con la URL real de Neon.'
+            });
+        }
+
+        const { datos } = req.body;
+
+        if (!datos || !Array.isArray(datos) || datos.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No hay datos de CER para guardar'
+            });
+        }
+
+        // Insertar/actualizar datos usando INSERT múltiple (mucho más rápido)
+        const batchSize = 500; // Aumentar tamaño de lote
+        let totalActualizados = 0;
+        
+        for (let i = 0; i < datos.length; i += batchSize) {
+            const batch = datos.slice(i, i + batchSize);
+            
+            // Construir query con múltiples valores
+            const values = [];
+            const placeholders = [];
+            const params = [];
+            
+            batch.forEach((item, index) => {
+                const baseIndex = index * 3;
+                placeholders.push(`($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`);
+                params.push(item.fecha, item.valor, item.idVariable || 30);
+            });
+            
+            const query = `
+                INSERT INTO cer (fecha, valor, id_variable)
+                VALUES ${placeholders.join(', ')}
+                ON CONFLICT (fecha) DO UPDATE SET
+                    valor = EXCLUDED.valor,
+                    id_variable = EXCLUDED.id_variable
+            `;
+            
+            try {
+                await pool.query(query, params);
+                totalActualizados += batch.length;
+            } catch (error) {
+                console.error('Error al insertar/actualizar lote CER:', error);
+                throw error;
+            }
+        }
+
+        res.json({
+            success: true,
+            actualizados: totalActualizados,
+            message: `Se guardaron/actualizaron ${totalActualizados} registros de CER`
+        });
+
+    } catch (error) {
+        console.error('Error al guardar CER:', error);
+        // Si hay error de conexión, retornar error específico
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Error de conexión a la base de datos. Verifique la configuración de DATABASE_URL.'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al guardar datos de CER'
+        });
+    }
+};
+
+// Verificar si existen datos de Feriados en BD
+const verificarFeriados = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.json({
+                success: true,
+                existen: false,
+                cantidad: 0
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (!desde || !hasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parámetros "desde" y "hasta" son requeridos'
+            });
+        }
+
+        const result = await pool.query(
+            'SELECT COUNT(*) as cantidad FROM feriados WHERE fecha >= $1 AND fecha <= $2',
+            [desde, hasta]
+        );
+
+        const cantidad = parseInt(result.rows[0].cantidad);
+
+        res.json({
+            success: true,
+            existen: cantidad > 0,
+            cantidad: cantidad
+        });
+
+    } catch (error) {
+        console.error('Error al verificar Feriados:', error);
+        // Si hay error de conexión, asumir que no existen datos
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.json({
+                success: true,
+                existen: false,
+                cantidad: 0
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al verificar datos de Feriados'
+        });
+    }
+};
+
+// Obtener datos de Feriados desde BD (con paginación o por rango de fechas)
+const obtenerFeriadosBD = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada. Configure DATABASE_URL en las variables de entorno.'
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        // Si se proporcionan desde y hasta, obtener por rango de fechas
+        if (desde && hasta) {
+            const result = await pool.query(
+                'SELECT fecha, nombre, tipo FROM feriados WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha ASC',
+                [desde, hasta]
+            );
+
+            return res.json({
+                success: true,
+                datos: result.rows
+            });
+        }
+
+        // Si no, usar paginación
+        const pagina = parseInt(req.query.pagina) || 1;
+        const porPagina = parseInt(req.query.porPagina) || 50;
+        const offset = (pagina - 1) * porPagina;
+
+        // Obtener total de registros
+        const countResult = await pool.query('SELECT COUNT(*) as total FROM feriados');
+        const total = parseInt(countResult.rows[0].total);
+
+        // Obtener datos paginados (orden descendente - más reciente primero)
+        const result = await pool.query(
+            'SELECT fecha, nombre, tipo FROM feriados ORDER BY fecha DESC LIMIT $1 OFFSET $2',
+            [porPagina, offset]
+        );
+
+        res.json({
+            success: true,
+            datos: result.rows,
+            pagina: pagina,
+            porPagina: porPagina,
+            total: total,
+            totalPaginas: Math.ceil(total / porPagina)
+        });
+
+    } catch (error) {
+        console.error('Error al obtener Feriados de BD:', error);
+        // Si hay error de conexión, retornar error
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Error de conexión a la base de datos'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener datos de Feriados'
+        });
+    }
+};
+
+// Obtener fechas existentes de Feriados en un rango
+const obtenerFechasExistentesFeriados = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.json({
+                success: true,
+                fechas: []
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (!desde || !hasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parámetros "desde" y "hasta" son requeridos'
+            });
+        }
+
+        const result = await pool.query(
+            'SELECT fecha FROM feriados WHERE fecha >= $1 AND fecha <= $2',
+            [desde, hasta]
+        );
+
+        const fechas = result.rows.map(row => row.fecha);
+
+        res.json({
+            success: true,
+            fechas: fechas
+        });
+
+    } catch (error) {
+        console.error('Error al obtener fechas existentes de Feriados:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.json({
+                success: true,
+                fechas: []
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener fechas existentes'
+        });
+    }
+};
+
+// Guardar datos de Feriados
+const guardarFeriados = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada. Configure DATABASE_URL en las variables de entorno con la URL real de Neon.'
+            });
+        }
+
+        const { datos } = req.body;
+
+        if (!datos || !Array.isArray(datos) || datos.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No hay datos de feriados para guardar'
+            });
+        }
+
+        // Insertar/actualizar datos usando INSERT múltiple (mucho más rápido)
+        const batchSize = 500; // Aumentar tamaño de lote
+        let totalActualizados = 0;
+        
+        for (let i = 0; i < datos.length; i += batchSize) {
+            const batch = datos.slice(i, i + batchSize);
+            
+            // Construir query con múltiples valores
+            const placeholders = [];
+            const params = [];
+            
+            batch.forEach((item, index) => {
+                const baseIndex = index * 3;
+                placeholders.push(`($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`);
+                params.push(item.fecha, item.nombre || '', item.tipo || '');
+            });
+            
+            const query = `
+                INSERT INTO feriados (fecha, nombre, tipo)
+                VALUES ${placeholders.join(', ')}
+                ON CONFLICT (fecha) DO UPDATE SET
+                    nombre = EXCLUDED.nombre,
+                    tipo = EXCLUDED.tipo
+            `;
+            
+            try {
+                await pool.query(query, params);
+                totalActualizados += batch.length;
+            } catch (error) {
+                console.error('Error al insertar/actualizar lote Feriados:', error);
+                throw error;
+            }
+        }
+
+        res.json({
+            success: true,
+            actualizados: totalActualizados,
+            message: `Se guardaron/actualizaron ${totalActualizados} feriados`
+        });
+
+    } catch (error) {
+        console.error('Error al guardar feriados:', error);
+        // Si hay error de conexión, retornar error específico
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Error de conexión a la base de datos. Verifique la configuración de DATABASE_URL.'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al guardar datos de feriados'
         });
     }
 };
@@ -189,6 +917,14 @@ module.exports = {
     renderBADLAR,
     renderFeriados,
     calcularTIR,
-    guardarCalculadora
+    guardarCalculadora,
+    verificarCER,
+    obtenerCERBD,
+    obtenerFechasExistentesCER,
+    guardarCER,
+    verificarFeriados,
+    obtenerFeriadosBD,
+    obtenerFechasExistentesFeriados,
+    guardarFeriados
 };
 

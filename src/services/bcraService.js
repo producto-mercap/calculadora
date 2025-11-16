@@ -24,16 +24,16 @@ const obtenerCER = async (fechaDesde, fechaHasta) => {
         let añoActual = fechaInicio.getFullYear();
         const añoFin = fechaHastaDate.getFullYear();
         
-        // Particionar por años (máximo 1 año por consulta)
+        // Particionar por años (máximo 1 año por consulta) - CORREGIDO: usar el rango exacto
         while (añoActual <= añoFin) {
-            // Calcular fecha inicio del año
+            // Calcular fecha inicio: usar fechaDesde si es el primer año, sino inicio del año
             let desdeAño = añoActual === fechaInicio.getFullYear() 
-                ? `${añoActual}-01-01` 
+                ? fechaDesde  // Usar la fecha desde solicitada
                 : `${añoActual}-01-01`;
             
-            // Calcular fecha fin del año (o fechaHasta si es el último año)
+            // Calcular fecha fin: usar fechaHasta si es el último año, sino fin del año
             let hastaAño = añoActual === añoFin
-                ? fechaHasta
+                ? fechaHasta  // Usar la fecha hasta solicitada
                 : `${añoActual}-12-31`;
             
             try {
@@ -52,8 +52,17 @@ const obtenerCER = async (fechaDesde, fechaHasta) => {
                 const datos = response.data?.results || [];
                 
                 if (Array.isArray(datos) && datos.length > 0) {
+                    // Filtrar solo los datos dentro del rango solicitado (por si la API devuelve más)
+                    const fechaDesdeStr = fechaDesde.split('T')[0];
+                    const fechaHastaStr = fechaHasta.split('T')[0];
+                    
+                    const datosFiltrados = datos.filter(item => {
+                        const fechaItem = item.fecha.split('T')[0];
+                        return fechaItem >= fechaDesdeStr && fechaItem <= fechaHastaStr;
+                    });
+                    
                     // Normalizar datos: extraer fecha y valor
-                    const datosNormalizados = datos.map(item => ({
+                    const datosNormalizados = datosFiltrados.map(item => ({
                         fecha: item.fecha,
                         valor: item.valor,
                         idVariable: item.idVariable

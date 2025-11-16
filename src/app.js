@@ -5,6 +5,9 @@ const path = require('path');
 const express = require('express');
 require('dotenv').config();
 
+// Configurar zona horaria de Argentina
+process.env.TZ = 'America/Argentina/Buenos_Aires';
+
 // Módulos propios
 const calculadoraRoutes = require('./routes/calculadoraRoutes');
 const apiRoutes = require('./routes/apiRoutes');
@@ -18,8 +21,9 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Aumentar límite de body-parser para permitir payloads grandes (CER y Feriados pueden ser grandes)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Rutas

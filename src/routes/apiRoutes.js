@@ -90,15 +90,17 @@ router.get('/badlar', async (req, res) => {
 router.get('/feriados/:anio', async (req, res) => {
     try {
         const { anio } = req.params;
+        const anioNum = parseInt(anio, 10);
 
-        if (!anio || isNaN(anio)) {
+        // Validar que sea un año válido (entre 2000 y 2100)
+        if (!anio || isNaN(anioNum) || anioNum < 2000 || anioNum > 2100) {
             return res.status(400).json({
                 success: false,
-                error: 'Año inválido'
+                error: `Año inválido: ${anio}. Debe ser un número entre 2000 y 2100.`
             });
         }
 
-        const datos = await feriadosService.obtenerFeriados(parseInt(anio));
+        const datos = await feriadosService.obtenerFeriados(anioNum);
 
         res.json({
             success: true,
@@ -106,6 +108,13 @@ router.get('/feriados/:anio', async (req, res) => {
         });
     } catch (error) {
         console.error('Error en API Feriados:', error);
+        // Si es 404, retornar array vacío en lugar de error
+        if (error.response && error.response.status === 404) {
+            return res.json({
+                success: true,
+                datos: []
+            });
+        }
         res.status(500).json({
             success: false,
             error: error.message
@@ -142,6 +151,18 @@ router.get('/feriados', async (req, res) => {
 
 // Guardar calculadora
 router.post('/calculadora/guardar', calculadoraController.guardarCalculadora);
+
+// Verificar y obtener CER desde BD
+router.get('/cer/verificar', calculadoraController.verificarCER);
+router.get('/cer/bd', calculadoraController.obtenerCERBD);
+router.get('/cer/fechas-existentes', calculadoraController.obtenerFechasExistentesCER);
+router.post('/cer/guardar', calculadoraController.guardarCER);
+
+// Verificar y obtener Feriados desde BD
+router.get('/feriados/verificar', calculadoraController.verificarFeriados);
+router.get('/feriados/bd', calculadoraController.obtenerFeriadosBD);
+router.get('/feriados/fechas-existentes', calculadoraController.obtenerFechasExistentesFeriados);
+router.post('/feriados/guardar', calculadoraController.guardarFeriados);
 
 module.exports = router;
 

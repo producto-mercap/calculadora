@@ -69,7 +69,12 @@ const obtenerFeriadosRango = async (fechaDesde, fechaHasta) => {
                 // Pequeña pausa entre llamadas
                 await new Promise(resolve => setTimeout(resolve, 100));
             } catch (error) {
-                console.error(`Error al obtener feriados para año ${añoActual}:`, error.message);
+                // Si es 404, el año no existe en la API (normal para años pasados o futuros)
+                if (error.response && error.response.status === 404) {
+                    console.warn(`⚠️ No hay datos de feriados para el año ${añoActual} (404)`);
+                } else {
+                    console.error(`Error al obtener feriados para año ${añoActual}:`, error.message);
+                }
                 // Continuar con el siguiente año aunque falle uno
             }
             
