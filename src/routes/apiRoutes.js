@@ -152,6 +152,12 @@ router.get('/feriados', async (req, res) => {
 // Guardar calculadora
 router.post('/calculadora/guardar', calculadoraController.guardarCalculadora);
 
+// Listar calculadoras guardadas
+router.get('/calculadora/listar', calculadoraController.listarCalculadoras);
+
+// Obtener una calculadora específica
+router.get('/calculadora/:titulo', calculadoraController.obtenerCalculadora);
+
 // Verificar y obtener CER desde BD
 router.get('/cer/verificar', calculadoraController.verificarCER);
 router.get('/cer/bd', calculadoraController.obtenerCERBD);

@@ -85,7 +85,7 @@ const renderCER = async (req, res) => {
         let datos = [];
         let total = 0;
         let pagina = 1;
-        const porPagina = 50;
+        const porPagina = 30;
 
         // Si hay pool configurado, cargar datos paginados
         if (pool) {
@@ -97,7 +97,7 @@ const renderCER = async (req, res) => {
                 const countResult = await pool.query('SELECT COUNT(*) as total FROM cer');
                 total = parseInt(countResult.rows[0].total);
 
-                // Obtener datos paginados
+                // Obtener datos paginados (orden descendente - más reciente primero)
                 const result = await pool.query(
                     'SELECT fecha, valor, id_variable as idVariable FROM cer ORDER BY fecha DESC LIMIT $1 OFFSET $2',
                     [porPagina, offset]
@@ -170,7 +170,7 @@ const renderFeriados = async (req, res) => {
         let datos = [];
         let total = 0;
         let pagina = 1;
-        const porPagina = 50;
+        const porPagina = 30;
 
         // Si hay pool configurado, cargar datos paginados
         if (pool) {
@@ -182,9 +182,9 @@ const renderFeriados = async (req, res) => {
                 const countResult = await pool.query('SELECT COUNT(*) as total FROM feriados');
                 total = parseInt(countResult.rows[0].total);
 
-                // Obtener datos paginados
+                // Obtener datos paginados (orden descendente - más reciente primero)
                 const result = await pool.query(
-                    'SELECT fecha, nombre, tipo FROM feriados ORDER BY fecha ASC LIMIT $1 OFFSET $2',
+                    'SELECT fecha, nombre, tipo FROM feriados ORDER BY fecha DESC LIMIT $1 OFFSET $2',
                     [porPagina, offset]
                 );
                 datos = result.rows;
@@ -495,14 +495,14 @@ const obtenerCERBD = async (req, res) => {
 
         // Si no, usar paginación
         const pagina = parseInt(req.query.pagina) || 1;
-        const porPagina = parseInt(req.query.porPagina) || 50;
+        const porPagina = parseInt(req.query.porPagina) || 30;
         const offset = (pagina - 1) * porPagina;
 
         // Obtener total de registros
         const countResult = await pool.query('SELECT COUNT(*) as total FROM cer');
         const total = parseInt(countResult.rows[0].total);
 
-        // Obtener datos paginados
+        // Obtener datos paginados (orden descendente - más reciente primero)
         const result = await pool.query(
             'SELECT fecha, valor, id_variable as idVariable FROM cer ORDER BY fecha DESC LIMIT $1 OFFSET $2',
             [porPagina, offset]
@@ -744,7 +744,7 @@ const obtenerFeriadosBD = async (req, res) => {
 
         // Si no, usar paginación
         const pagina = parseInt(req.query.pagina) || 1;
-        const porPagina = parseInt(req.query.porPagina) || 50;
+        const porPagina = parseInt(req.query.porPagina) || 30;
         const offset = (pagina - 1) * porPagina;
 
         // Obtener total de registros
@@ -909,6 +909,111 @@ const guardarFeriados = async (req, res) => {
     }
 };
 
+// Listar calculadoras guardadas
+const listarCalculadoras = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada'
+            });
+        }
+
+        // Obtener todas las calculadoras (especies y partidas)
+        const especies = await pool.query(
+            'SELECT titulo, ticker, fecha_creacion, fecha_actualizacion FROM especies ORDER BY fecha_actualizacion DESC'
+        );
+        
+        const partidas = await pool.query(
+            'SELECT titulo, ticker, fecha_creacion, fecha_actualizacion FROM partidas ORDER BY fecha_actualizacion DESC'
+        );
+
+        // Combinar y ordenar por fecha de actualización
+        const calculadoras = [
+            ...especies.rows.map(row => ({ ...row, tipo: 'especie' })),
+            ...partidas.rows.map(row => ({ ...row, tipo: 'partida' }))
+        ].sort((a, b) => {
+            const fechaA = new Date(a.fecha_actualizacion || a.fecha_creacion);
+            const fechaB = new Date(b.fecha_actualizacion || b.fecha_creacion);
+            return fechaB - fechaA;
+        });
+
+        res.json({
+            success: true,
+            calculadoras: calculadoras
+        });
+
+    } catch (error) {
+        console.error('Error al listar calculadoras:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al listar calculadoras'
+        });
+    }
+};
+
+// Obtener una calculadora específica
+const obtenerCalculadora = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada'
+            });
+        }
+
+        const { titulo } = req.params;
+
+        if (!titulo) {
+            return res.status(400).json({
+                success: false,
+                error: 'Título es requerido'
+            });
+        }
+
+        // Obtener datos de especie
+        const especieResult = await pool.query(
+            'SELECT * FROM especies WHERE titulo = $1',
+            [titulo]
+        );
+
+        // Obtener datos de partida
+        const partidaResult = await pool.query(
+            'SELECT * FROM partidas WHERE titulo = $1',
+            [titulo]
+        );
+
+        // Obtener cashflow (cupones)
+        const cashflowResult = await pool.query(
+            'SELECT * FROM cashflow WHERE titulo = $1 ORDER BY fecha_inicio ASC',
+            [titulo]
+        );
+
+        const datos = {
+            titulo: titulo,
+            datosEspecie: especieResult.rows[0] || null,
+            datosPartida: partidaResult.rows[0] || null,
+            cashflow: cashflowResult.rows || []
+        };
+
+        res.json({
+            success: true,
+            datos: datos
+        });
+
+    } catch (error) {
+        console.error('Error al obtener calculadora:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener calculadora'
+        });
+    }
+};
+
 module.exports = {
     renderCalculadoraCER,
     renderCalculadoraVariable,
@@ -918,6 +1023,8 @@ module.exports = {
     renderFeriados,
     calcularTIR,
     guardarCalculadora,
+    listarCalculadoras,
+    obtenerCalculadora,
     verificarCER,
     obtenerCERBD,
     obtenerFechasExistentesCER,

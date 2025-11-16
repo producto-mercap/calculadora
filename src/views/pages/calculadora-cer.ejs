@@ -15,6 +15,12 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h1 class="page-title" style="margin: 0;">Calculadora CER - TIR de Bonos</h1>
                     <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-primary" onclick="abrirModalCargar()" id="btnCargar">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                            </svg>
+                            <span>Cargar</span>
+                        </button>
                         <button class="btn btn-primary" onclick="guardarCalculadora()" id="btnGuardar">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
@@ -64,10 +70,32 @@
                             <tbody id="cashflowBody">
                                 <!-- Fila de inversión inicial -->
                                 <tr class="inversion-row" data-tipo="inversion">
-                                    <td><input type="date" class="input-table" disabled /></td>
-                                    <td><input type="date" class="input-table" id="fechaLiquidacion" /></td>
-                                    <td><input type="date" class="input-table" disabled /></td>
-                                    <td><input type="date" class="input-table" disabled /></td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <input type="text" class="input-table date-input" disabled style="padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <input type="text" class="input-table date-input" id="fechaLiquidacion" style="padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                            <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaLiquidacion')" title="Seleccionar fecha" style="right: 4px;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                                </svg>
+                                            </button>
+                                            <div id="datePickerFechaLiquidacion" class="date-picker-popup" style="display: none;"></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <input type="text" class="input-table date-input" disabled style="padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <input type="text" class="input-table date-input" disabled style="padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                        </div>
+                                    </td>
                                     <td><input type="number" class="input-table" id="valorCER" step="0.0001" /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
@@ -117,12 +145,20 @@
                             
                             <div class="form-group">
                                 <label class="form-label">Fecha Compra</label>
-                                <input type="date" class="input" id="fechaCompra" />
+                                <div style="position: relative; display: inline-block; width: 100%;">
+                                    <input type="text" class="input date-input" id="fechaCompra" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                    <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaCompra')" title="Seleccionar fecha">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                        </svg>
+                                    </button>
+                                    <div id="datePickerFechaCompra" class="date-picker-popup" style="display: none;"></div>
+                                </div>
                             </div>
                             
                             <div class="form-group">
                                 <label class="form-label">Precio Compra</label>
-                                <input type="number" class="input" id="precioCompra" step="0.01" />
+                                <input type="text" class="input" id="precioCompra" placeholder="Ej: 100.50 o 100,50" />
                             </div>
                             
                             <div class="form-group">
@@ -142,7 +178,15 @@
                             
                             <div class="form-group">
                                 <label class="form-label">Fecha Emisión</label>
-                                <input type="date" class="input" id="fechaEmision" />
+                                <div style="position: relative; display: inline-block; width: 100%;">
+                                    <input type="text" class="input date-input" id="fechaEmision" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                    <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaEmision')" title="Seleccionar fecha">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                        </svg>
+                                    </button>
+                                    <div id="datePickerFechaEmision" class="date-picker-popup" style="display: none;"></div>
+                                </div>
                             </div>
                             
                             <div class="form-group">
@@ -169,12 +213,28 @@
                             
                             <div class="form-group">
                                 <label class="form-label">Fecha Primera Renta</label>
-                                <input type="date" class="input" id="fechaPrimeraRenta" />
+                                <div style="position: relative; display: inline-block; width: 100%;">
+                                    <input type="text" class="input date-input" id="fechaPrimeraRenta" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                    <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaPrimeraRenta')" title="Seleccionar fecha">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                        </svg>
+                                    </button>
+                                    <div id="datePickerFechaPrimeraRenta" class="date-picker-popup" style="display: none;"></div>
+                                </div>
                             </div>
                             
                             <div class="form-group">
                                 <label class="form-label">Fecha Amortización</label>
-                                <input type="date" class="input" id="fechaAmortizacion" />
+                                <div style="position: relative; display: inline-block; width: 100%;">
+                                    <input type="text" class="input date-input" id="fechaAmortizacion" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                    <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaAmortizacion')" title="Seleccionar fecha">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                        </svg>
+                                    </button>
+                                    <div id="datePickerFechaAmortizacion" class="date-picker-popup" style="display: none;"></div>
+                                </div>
                             </div>
                             
                             <div class="form-group">
@@ -192,7 +252,7 @@
                             </div>
                             
                             <div class="form-group" style="margin-top: 24px;">
-                                <button class="btn btn-primary" onclick="autocompletarCupones().catch(console.error)" style="width: 100%;">
+                                <button class="btn btn-primary" onclick="autocompletarCupones()" style="width: 100%;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                                     </svg>
@@ -265,6 +325,25 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Modal para cargar calculadoras guardadas -->
+    <div id="modalCargar" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;">
+        <div class="card" style="max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; position: relative;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color);">
+                <h2 style="font-size: 20px; font-weight: 500; margin: 0;">Cargar Calculadora</h2>
+                <button onclick="cerrarModalCargar()" style="background: none; border: none; cursor: pointer; padding: 8px; border-radius: 50%; transition: background 0.2s;" onmouseover="this.style.background='#f1f3f4'" onmouseout="this.style.background='transparent'">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="calculadorasLista" style="min-height: 200px;">
+                <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    Cargando calculadoras...
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="/js/main.js"></script>
