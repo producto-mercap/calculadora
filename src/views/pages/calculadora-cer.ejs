@@ -13,20 +13,20 @@
         <main class="main-content">
             <div class="content-area">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h1 class="page-title" style="margin: 0;">Calculadora CER - TIR de Bonos</h1>
+                    <h1 class="page-title" style="margin: 0;">Calculadora CER</h1>
                     <div style="display: flex; gap: 12px;">
-                        <button class="btn btn-primary" onclick="abrirModalCargar()" id="btnCargar">
+                        <a href="#" class="chr-link chr-link--button-secondary" onclick="event.preventDefault(); abrirModalCargar();" id="btnCargar">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                             </svg>
                             <span>Cargar</span>
-                        </button>
-                        <button class="btn btn-primary" onclick="guardarCalculadora()" id="btnGuardar">
+                        </a>
+                        <a href="#" class="chr-link chr-link--button-secondary" onclick="event.preventDefault(); guardarCalculadora();" id="btnGuardar">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
                             </svg>
                             <span>Guardar</span>
-                        </button>
+                        </a>
                     </div>
                 </div>
                 
@@ -34,12 +34,12 @@
                 <div class="card" style="margin-bottom: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h2 style="font-size: 20px; font-weight: 500; margin: 0;">Cashflow - Cupones</h2>
-                        <button class="btn btn-primary" onclick="agregarCupon()" id="btnAgregarCupon">
+                        <a href="#" class="chr-link chr-link--button-secondary" onclick="event.preventDefault(); agregarCupon();" id="btnAgregarCupon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                             </svg>
                             <span>Agregar Cupón</span>
-                        </button>
+                        </a>
                     </div>
                     
                     <!-- Tabla de cashflow -->
@@ -47,23 +47,23 @@
                         <table class="cashflow-table" id="cashflowTable">
                             <thead>
                                 <tr>
-                                    <th>Fecha Inicio</th>
-                                    <th>Fecha Liquidación</th>
-                                    <th>Inicio Intervalo</th>
-                                    <th>Final</th>
-                                    <th>Valor CER</th>
-                                    <th>Day Count Factor</th>
-                                    <th>Amortización</th>
-                                    <th>Valor Residual</th>
-                                    <th>Amortización Ajustada</th>
-                                    <th>Renta Nominal</th>
-                                    <th>Renta TNA</th>
-                                    <th>Renta Ajustada</th>
-                                    <th>Factor Actualización</th>
-                                    <th>Pagos Actualizados</th>
-                                    <th>Flujos</th>
-                                    <th>Flujos Desc. Fecha Compra</th>
-                                    <th>Flujos Desc. a Hoy</th>
+                                    <th>Fecha<br>Inicio</th>
+                                    <th>Fecha<br>Liquid.</th>
+                                    <th>Inicio<br>Intervalo</th>
+                                    <th>Final<br>Intervalo</th>
+                                    <th class="cer-column">Valor CER<br>Inicio</th>
+                                    <th class="cer-column">Valor CER<br>Final</th>
+                                    <th>Day Count<br>Factor</th>
+                                    <th>Amortiz.</th>
+                                    <th>Valor<br>Residual</th>
+                                    <th>Amortiz.<br>Ajustada</th>
+                                    <th>Renta<br>Nominal</th>
+                                    <th>Renta<br>TNA</th>
+                                    <th>Renta<br>Ajustada</th>
+                                    <th>Factor<br>Actualiz.</th>
+                                    <th>Pagos<br>Actualiz.</th>
+                                    <th class="flujos-column">Flujos</th>
+                                    <th class="flujos-column">Flujos Desc.<br>F. Compra</th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
@@ -71,32 +71,19 @@
                                 <!-- Fila de inversión inicial -->
                                 <tr class="inversion-row" data-tipo="inversion">
                                     <td>
-                                        <div style="position: relative;">
-                                            <input type="text" class="input-table date-input" disabled style="padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
-                                        </div>
+                                        <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>
                                     <td>
-                                        <div style="position: relative;">
-                                            <input type="text" class="input-table date-input" id="fechaLiquidacion" style="padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
-                                            <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaLiquidacion')" title="Seleccionar fecha" style="right: 4px;">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
-                                                </svg>
-                                            </button>
-                                            <div id="datePickerFechaLiquidacion" class="date-picker-popup" style="display: none;"></div>
-                                        </div>
+                                        <input type="text" class="input-table date-input" id="fechaLiquidacion" placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>
                                     <td>
-                                        <div style="position: relative;">
-                                            <input type="text" class="input-table date-input" disabled style="padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
-                                        </div>
+                                        <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>
                                     <td>
-                                        <div style="position: relative;">
-                                            <input type="text" class="input-table date-input" disabled style="padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
-                                        </div>
+                                        <input type="text" class="input-table date-input" id="fechaFinalIntervaloInversion" readonly placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>
-                                    <td><input type="number" class="input-table" id="valorCER" step="0.0001" /></td>
+                                    <td class="cer-column"><input type="number" class="input-table" id="valorCER" step="0.0001" readonly /></td>
+                                    <td class="cer-column"><input type="number" class="input-table" id="valorCERFinal" step="0.0001" readonly /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
@@ -106,25 +93,45 @@
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
-                                    <td><input type="number" class="input-table" id="flujos" /></td>
-                                    <td><input type="number" class="input-table" id="flujosDescFechaCompra" /></td>
-                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td class="flujos-column"><input type="number" class="input-table" id="flujos" /></td>
+                                    <td class="flujos-column"><input type="number" class="input-table" id="flujosDescFechaCompra" /></td>
                                     <td>
                                         <span style="color: var(--text-secondary); font-size: 12px;">Inversión</span>
                                     </td>
                                 </tr>
                             </tbody>
+                            <tfoot id="cashflowFooter" style="display: none;">
+                                <tr style="background: #f8f9fa; font-weight: 600;">
+                                    <td colspan="17" style="text-align: right; padding: 12px 24px; border-top: 2px solid var(--border-color);">
+                                        <span style="color: var(--text-secondary); margin-right: 12px;">Sumatoria:</span>
+                                        <span id="sumatoriaFlujosDesc" style="color: var(--text-primary); font-size: 16px;">0.00000000</span>
+                                    </td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                     
                     <!-- Footer con botón calcular y resultado -->
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border-color);">
-                        <button class="btn btn-primary" onclick="calcularTIR()" id="btnCalcularTIR" style="min-width: 150px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-                            </svg>
-                            <span>Calcular TIR</span>
-                        </button>
+                        <div style="display: flex; align-items: center; gap: 24px;">
+                            <button class="glue-button glue-button--high-emphasis" onclick="calcularTIR()" id="btnCalcularTIR" style="min-width: 150px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                                </svg>
+                                <span>Calcular TIR</span>
+                            </button>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">Coef. CER Emisión:</span>
+                                    <span id="coeficienteCEREmision" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">-</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">Coef. CER Compra:</span>
+                                    <span id="coeficienteCERCompra" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">-</span>
+                                </div>
+                            </div>
+                        </div>
                         
                         <div style="display: flex; align-items: center; gap: 12px;">
                             <span style="font-size: 16px; font-weight: 500; color: var(--text-secondary);">TIR:</span>
@@ -188,10 +195,19 @@
                                     <div id="datePickerFechaEmision" class="date-picker-popup" style="display: none;"></div>
                                 </div>
                             </div>
+                            <div class="form-group">
+                                <label class="form-label">Valor CER Emisión</label>
+                                <input type="number" class="input" id="valorCEREmision" step="0.0001" readonly style="width: 100%;" placeholder="Se autocompleta con fecha de emisión" />
+                            </div>
                             
                             <div class="form-group">
-                                <label class="form-label">Tipo Interés (días)</label>
-                                <input type="number" class="input" id="tipoInteresDias" step="1" placeholder="Ej: 360" />
+                                <label class="form-label">Base para contar días</label>
+                                <select class="input" id="tipoInteresDias">
+                                    <option value="0">US (NASD) 30/360</option>
+                                    <option value="1">Real/real (Actual/actual)</option>
+                                    <option value="2">Real/360 (Actual/360)</option>
+                                    <option value="3">Real/365 (Actual/365)</option>
+                                </select>
                             </div>
                             
                             <div class="form-group">
@@ -260,40 +276,44 @@
                                 </button>
                             </div>
                         </div>
-                        
-                        <!-- Resultados -->
-                        <div class="card">
-                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Resultados</h3>
-                            
-                            <div class="resultado-item">
-                                <span class="resultado-label">Pagos Efect. Actualizados</span>
-                                <span class="resultado-valor" id="pagosEfectActualizados">-</span>
-                            </div>
-                            
-                            <div class="resultado-item">
-                                <span class="resultado-label">Precio C+T Hoy Ajustado</span>
-                                <span class="resultado-valor" id="precioCTHoyAjustado">-</span>
-                            </div>
-                            
-                            <div class="resultado-item">
-                                <span class="resultado-label">Precio C+T Ajust - Pagos</span>
-                                <span class="resultado-valor" id="precioCTAjustPagos">-</span>
-                            </div>
-                            
-                            <div class="resultado-item">
-                                <span class="resultado-label">Precio Flujos Descontados</span>
-                                <span class="resultado-valor" id="precioFlujosDescontados">-</span>
-                            </div>
-                            
-                            <div class="resultado-item">
-                                <span class="resultado-label">Precio Técnico Vencimiento</span>
-                                <span class="resultado-valor" id="precioTecnicoVencimiento">-</span>
-                            </div>
-                        </div>
                     </div>
                     
-                    <!-- Panel derecho: Tira de Precios -->
-                    <div class="card">
+                    <!-- Panel derecho: Resultados y Tira de Precios -->
+                    <div>
+                        <!-- Resultados -->
+                        <div class="card" style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Resultados</h3>
+                            
+                            <div style="display: flex; flex-wrap: nowrap; gap: 12px; overflow-x: auto;">
+                                <div class="resultado-item-horizontal">
+                                    <span class="resultado-label">Precio C+T</span>
+                                    <span class="resultado-valor" id="precioCT">-</span>
+                                </div>
+                                
+                                <div class="resultado-item-horizontal">
+                                    <span class="resultado-label">Precio C+T Ajustado</span>
+                                    <span class="resultado-valor" id="precioCTHoyAjustado">-</span>
+                                </div>
+                                
+                                <div class="resultado-item-horizontal">
+                                    <span class="resultado-label">Pagos Efect. Actualizados</span>
+                                    <span class="resultado-valor" id="pagosEfectActualizados">-</span>
+                                </div>
+                                
+                                <div class="resultado-item-horizontal">
+                                    <span class="resultado-label">Precio Ajustado - Pagos</span>
+                                    <span class="resultado-valor" id="precioCTAjustPagos">-</span>
+                                </div>
+                                
+                                <div class="resultado-item-horizontal">
+                                    <span class="resultado-label">Precio Técnico Venc.</span>
+                                    <span class="resultado-valor" id="precioTecnicoVencimiento">-</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tira de Precios -->
+                        <div class="card">
                         <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Tira de Precios</h3>
                         
                         <div style="overflow-x: auto;">

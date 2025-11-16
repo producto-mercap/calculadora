@@ -86,6 +86,12 @@ router.get('/badlar', async (req, res) => {
     }
 });
 
+// Verificar y obtener Feriados desde BD (debe ir ANTES de /feriados/:anio para evitar conflictos)
+router.get('/feriados/verificar', calculadoraController.verificarFeriados);
+router.get('/feriados/bd', calculadoraController.obtenerFeriadosBD);
+router.get('/feriados/fechas-existentes', calculadoraController.obtenerFechasExistentesFeriados);
+router.post('/feriados/guardar', calculadoraController.guardarFeriados);
+
 // Obtener feriados de un año específico
 router.get('/feriados/:anio', async (req, res) => {
     try {
@@ -164,11 +170,7 @@ router.get('/cer/bd', calculadoraController.obtenerCERBD);
 router.get('/cer/fechas-existentes', calculadoraController.obtenerFechasExistentesCER);
 router.post('/cer/guardar', calculadoraController.guardarCER);
 
-// Verificar y obtener Feriados desde BD
-router.get('/feriados/verificar', calculadoraController.verificarFeriados);
-router.get('/feriados/bd', calculadoraController.obtenerFeriadosBD);
-router.get('/feriados/fechas-existentes', calculadoraController.obtenerFechasExistentesFeriados);
-router.post('/feriados/guardar', calculadoraController.guardarFeriados);
+// Estas rutas ya están definidas arriba antes de /feriados/:anio
 
 module.exports = router;
 

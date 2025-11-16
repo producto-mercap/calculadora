@@ -256,7 +256,7 @@ const guardarCalculadora = async (req, res) => {
                 error: 'Base de datos no configurada. Configure DATABASE_URL en las variables de entorno con la URL real de Neon (no use valores placeholder).'
             });
         }
-        const { titulo, datosPartida, datosEspecie, cashflow } = req.body;
+        const { titulo, datosPartida, datosEspecie, cashflow, sobreescribir } = req.body;
 
         // Validar título
         if (!titulo || titulo.trim() === '') {
@@ -274,28 +274,37 @@ const guardarCalculadora = async (req, res) => {
             });
         }
 
-        // Validar que no exista el título
-        const existeEspecie = await pool.query(
-            'SELECT titulo FROM especies WHERE titulo = $1',
-            [titulo]
-        );
-        
-        const existePartida = await pool.query(
-            'SELECT titulo FROM partidas WHERE titulo = $1',
-            [titulo]
-        );
+        // Validar que no exista el título (solo si no se está sobreescribiendo)
+        if (!sobreescribir) {
+            const existeEspecie = await pool.query(
+                'SELECT titulo FROM especies WHERE titulo = $1',
+                [titulo]
+            );
+            
+            const existePartida = await pool.query(
+                'SELECT titulo FROM partidas WHERE titulo = $1',
+                [titulo]
+            );
 
-        if (existeEspecie.rows.length > 0 || existePartida.rows.length > 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'Ya existe una calculadora con ese título. Por favor elija otro nombre.'
-            });
+            if (existeEspecie.rows.length > 0 || existePartida.rows.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Ya existe una calculadora con ese título. Por favor elija otro nombre.'
+                });
+            }
         }
 
         // Iniciar transacción
         await pool.query('BEGIN');
 
         try {
+            // Si se está sobreescribiendo, eliminar datos anteriores de ambas tablas y cashflow
+            if (sobreescribir) {
+                await pool.query('DELETE FROM cashflow WHERE titulo = $1', [titulo]);
+                await pool.query('DELETE FROM especies WHERE titulo = $1', [titulo]);
+                await pool.query('DELETE FROM partidas WHERE titulo = $1', [titulo]);
+            }
+
             // Guardar ESPECIE si hay datos
             if (datosEspecie && datosEspecie.ticker) {
                 // Usar NOW() con conversión explícita a zona horaria de Argentina
@@ -325,7 +334,8 @@ const guardarCalculadora = async (req, res) => {
                         datosEspecie.ticker || null,
                         datosEspecie.fechaEmision || null,
                         datosEspecie.tipoInteresDias || 360,
-                        datosEspecie.spread || 0,
+                        // Truncar a 8 decimales antes de guardar
+                        datosEspecie.spread ? parseFloat(parseFloat(datosEspecie.spread).toFixed(8)) : 0,
                         datosEspecie.periodicidad || null,
                         datosEspecie.fechaPrimeraRenta || null,
                         datosEspecie.fechaAmortizacion || null,
@@ -333,34 +343,6 @@ const guardarCalculadora = async (req, res) => {
                         datosEspecie.intervaloFin || 0
                     ]
                 );
-
-                // Guardar CASHFLOW (cupones) si hay datos
-                if (cashflow && Array.isArray(cashflow)) {
-                    // Eliminar cashflow anterior para este título
-                    await pool.query(
-                        'DELETE FROM cashflow WHERE titulo = $1',
-                        [titulo]
-                    );
-
-                    // Insertar nuevos cupones (solo los que tienen fecha_inicio y fecha_liquidacion)
-                    for (const cupon of cashflow) {
-                        if (cupon.tipo === 'cupon' && cupon.fechaInicio && cupon.fechaLiquidacion) {
-                            await pool.query(
-                                `INSERT INTO cashflow (
-                                    titulo, fecha_inicio, fecha_liquidacion, 
-                                    amortizacion, renta_tna
-                                ) VALUES ($1, $2, $3, $4, $5)`,
-                                [
-                                    titulo,
-                                    cupon.fechaInicio || null,
-                                    cupon.fechaLiquidacion || null,
-                                    cupon.amortizacion || 0,
-                                    cupon.rentaTNA || 0
-                                ]
-                            );
-                        }
-                    }
-                }
             }
 
             // Guardar PARTIDA si hay datos
@@ -382,10 +364,54 @@ const guardarCalculadora = async (req, res) => {
                         titulo,
                         datosEspecie?.ticker || datosPartida.ticker || null,
                         datosPartida.fechaCompra || null,
-                        datosPartida.precioCompra || 0,
+                        // Truncar a 8 decimales antes de guardar
+                        datosPartida.precioCompra ? parseFloat(parseFloat(datosPartida.precioCompra).toFixed(8)) : 0,
                         datosPartida.cantidadPartida || 0
                     ]
                 );
+            }
+
+            // Guardar CASHFLOW (cupones e inversión) si hay datos
+            if (cashflow && Array.isArray(cashflow) && cashflow.length > 0) {
+                // Si no se está sobreescribiendo, eliminar cashflow anterior para este título
+                if (!sobreescribir) {
+                    await pool.query(
+                        'DELETE FROM cashflow WHERE titulo = $1',
+                        [titulo]
+                    );
+                }
+
+                // Insertar nuevos cupones e inversión
+                for (const item of cashflow) {
+                    if (item.tipo === 'cupon' && item.fechaInicio && item.fechaLiquidacion) {
+                        // Solo guardar las columnas que existen en BD según estructura
+                        await pool.query(
+                            `INSERT INTO cashflow (
+                                titulo, fecha_inicio, fecha_liquidacion, 
+                                amortizacion, renta_tna
+                            ) VALUES ($1, $2, $3, $4, $5)`,
+                            [
+                                titulo,
+                                item.fechaInicio || null,
+                                item.fechaLiquidacion || null,
+                                // Truncar a 12 decimales antes de guardar (mayor precisión para TIR)
+                                item.amortizacion ? parseFloat(parseFloat(item.amortizacion).toFixed(12)) : 0,
+                                item.rentaTNA ? parseFloat(parseFloat(item.rentaTNA).toFixed(12)) : 0
+                            ]
+                        );
+                    } else if (item.tipo === 'inversion' && item.fechaLiquidacion) {
+                        // Solo guardar las columnas básicas que existen en BD
+                        await pool.query(
+                            `INSERT INTO cashflow (
+                                titulo, fecha_liquidacion
+                            ) VALUES ($1, $2)`,
+                            [
+                                titulo,
+                                item.fechaLiquidacion || null
+                            ]
+                        );
+                    }
+                }
             }
 
             // Commit transacción
