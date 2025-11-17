@@ -23,7 +23,7 @@ function formatearFechaMostrar(fechaString) {
         const year = partes[0];
         const month = partes[1];
         const day = partes[2];
-        return `${day}/${month}/${year}`;
+        return `${day}-${month}-${year}`;
     }
     
     // Si viene en otro formato, crear fecha local (Argentina)
@@ -33,7 +33,7 @@ function formatearFechaMostrar(fechaString) {
     const day = String(fecha.getDate()).padStart(2, '0');
     const month = String(fecha.getMonth() + 1).padStart(2, '0');
     const year = fecha.getFullYear();
-    return `${day}/${month}/${year}`;
+    return `${day}-${month}-${year}`;
 }
 
 // Formatear fecha para input (YYYY-MM-DD) sin problemas de zona horaria
@@ -88,10 +88,11 @@ function calcularRangosFaltantesFeriados(fechaDesde, fechaHasta, fechasExistente
     return rangos;
 }
 
-// Convertir DD/MM/AAAA a YYYY-MM-DD
+// Convertir DD-MM-AAAA o DD/MM/AAAA a YYYY-MM-DD
 function convertirFechaDDMMAAAAaYYYYMMDD(fechaDDMMAAAA) {
     if (!fechaDDMMAAAA) return '';
-    const partes = fechaDDMMAAAA.split('/');
+    // Aceptar tanto DD-MM-AAAA como DD/MM/AAAA
+    const partes = fechaDDMMAAAA.split(/[-\/]/);
     if (partes.length !== 3) return '';
     const dia = partes[0].padStart(2, '0');
     const mes = partes[1].padStart(2, '0');
@@ -99,20 +100,21 @@ function convertirFechaDDMMAAAAaYYYYMMDD(fechaDDMMAAAA) {
     return `${año}-${mes}-${dia}`;
 }
 
-// Convertir YYYY-MM-DD a DD/MM/AAAA
+// Convertir YYYY-MM-DD a DD-MM-AAAA
 function convertirFechaYYYYMMDDaDDMMAAAA(fechaYYYYMMDD) {
     if (!fechaYYYYMMDD) return '';
     if (typeof fechaYYYYMMDD === 'string' && /^\d{4}-\d{2}-\d{2}/.test(fechaYYYYMMDD)) {
         const partes = fechaYYYYMMDD.split('T')[0].split('-');
-        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        return `${partes[2]}-${partes[1]}-${partes[0]}`;
     }
     return fechaYYYYMMDD;
 }
 
-// Validar formato DD/MM/AAAA
+// Validar formato DD-MM-AAAA o DD/MM/AAAA (acepta ambos)
 function validarFechaDDMMAAAA(fecha) {
     if (!fecha) return false;
-    const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    // Aceptar tanto DD-MM-AAAA como DD/MM/AAAA
+    const regex = /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/;
     const match = fecha.match(regex);
     if (!match) return false;
     
@@ -134,15 +136,15 @@ function validarFechaDDMMAAAA(fecha) {
     return true;
 }
 
-// Aplicar máscara DD/MM/AAAA mientras se escribe
+// Aplicar máscara DD-MM-AAAA mientras se escribe
 function aplicarMascaraFecha(input) {
     input.addEventListener('input', function(e) {
         let valor = e.target.value.replace(/\D/g, '');
         if (valor.length >= 2) {
-            valor = valor.substring(0, 2) + '/' + valor.substring(2);
+            valor = valor.substring(0, 2) + '-' + valor.substring(2);
         }
         if (valor.length >= 5) {
-            valor = valor.substring(0, 5) + '/' + valor.substring(5, 9);
+            valor = valor.substring(0, 5) + '-' + valor.substring(5, 9);
         }
         e.target.value = valor;
     });
@@ -150,7 +152,7 @@ function aplicarMascaraFecha(input) {
     input.addEventListener('blur', function(e) {
         if (e.target.value && !validarFechaDDMMAAAA(e.target.value)) {
             e.target.style.borderColor = '#d93025';
-            showError('Formato de fecha inválido. Use DD/MM/AAAA');
+            showError('Formato de fecha inválido. Use DD-MM-AAAA');
         } else {
             e.target.style.borderColor = '';
         }
@@ -171,7 +173,7 @@ async function cargarFeriados() {
         
         // Validar formato
         if (!validarFechaDDMMAAAA(fechaDesdeDDMMAAAA) || !validarFechaDDMMAAAA(fechaHastaDDMMAAAA)) {
-            showError('Formato de fecha inválido. Use DD/MM/AAAA');
+            showError('Formato de fecha inválido. Use DD-MM-AAAA');
             return;
         }
         
@@ -285,6 +287,165 @@ async function cargarFeriados() {
     }
 }
 
+// Abrir modal de intervalos
+function abrirModalIntervalosFeriados() {
+    const modal = document.getElementById('modalIntervalosFeriados');
+    if (modal) {
+        modal.style.display = 'flex';
+        
+        // Inicializar fechas si no tienen valor
+        const fechaDesdeInput = document.getElementById('fechaDesdeFeriados');
+        const fechaHastaInput = document.getElementById('fechaHastaFeriados');
+        
+        if (fechaDesdeInput && !fechaDesdeInput.value) {
+            const hoy = new Date();
+            const dia15 = new Date(hoy.getFullYear(), hoy.getMonth(), 15);
+            fechaDesdeInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(dia15));
+        }
+        
+        if (fechaHastaInput && !fechaHastaInput.value) {
+            const hoy = new Date();
+            const dia15Siguiente = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 15);
+            fechaHastaInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(dia15Siguiente));
+        }
+    }
+}
+
+// Cerrar modal de intervalos
+function cerrarModalIntervalosFeriados() {
+    const modal = document.getElementById('modalIntervalosFeriados');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Confirmar y cargar Feriados
+async function confirmarCargarFeriados() {
+    cerrarModalIntervalosFeriados();
+    const btnCargar = document.getElementById('btnConfirmarCargarFeriados');
+    if (btnCargar) {
+        btnCargar.disabled = true;
+        btnCargar.innerHTML = 'Cargando...';
+    }
+    try {
+        await cargarFeriados();
+        // Refrescar la página después de cargar
+        window.location.reload();
+    } catch (error) {
+        console.error('Error al cargar Feriados:', error);
+        if (btnCargar) {
+            btnCargar.disabled = false;
+            btnCargar.innerHTML = 'Cargar';
+        }
+    }
+}
+
+// Limpiar filtro Feriados
+function limpiarFiltroFeriados() {
+    const buscarDesdeInput = document.getElementById('buscarDesdeFeriados');
+    const buscarHastaInput = document.getElementById('buscarHastaFeriados');
+    
+    if (buscarDesdeInput) buscarDesdeInput.value = '';
+    if (buscarHastaInput) buscarHastaInput.value = '';
+    
+    // Mostrar todos los registros
+    const tbody = document.getElementById('feriadosTableBody');
+    if (tbody) {
+        const filas = tbody.querySelectorAll('tr');
+        filas.forEach(fila => {
+            fila.style.display = '';
+        });
+    }
+}
+
+// Buscar Feriados por intervalo (consulta directa a BD)
+async function filtrarFeriadosPorIntervalo() {
+    console.log('🔍 filtrarFeriadosPorIntervalo - INICIO');
+    
+    const buscarDesdeInput = document.getElementById('buscarDesdeFeriados');
+    const buscarHastaInput = document.getElementById('buscarHastaFeriados');
+    
+    if (!buscarDesdeInput || !buscarHastaInput) {
+        console.error('❌ filtrarFeriadosPorIntervalo - Inputs no encontrados');
+        return;
+    }
+    
+    const fechaDesdeStr = buscarDesdeInput.value.trim();
+    const fechaHastaStr = buscarHastaInput.value.trim();
+    
+    console.log('📅 filtrarFeriadosPorIntervalo - Fechas ingresadas:', {
+        fechaDesde: fechaDesdeStr,
+        fechaHasta: fechaHastaStr
+    });
+    
+    // Validar que ambas fechas estén presentes
+    if (!fechaDesdeStr || !fechaHastaStr) {
+        showError('Por favor complete ambas fechas');
+        return;
+    }
+    
+    // Validar formato
+    if (!validarFechaDDMMAAAA(fechaDesdeStr) || !validarFechaDDMMAAAA(fechaHastaStr)) {
+        showError('Formato de fecha inválido. Use DD-MM-AAAA');
+        return;
+    }
+    
+    // Convertir a YYYY-MM-DD para la API
+    const fechaDesdeYYYYMMDD = convertirFechaDDMMAAAAaYYYYMMDD(fechaDesdeStr);
+    const fechaHastaYYYYMMDD = convertirFechaDDMMAAAAaYYYYMMDD(fechaHastaStr);
+    
+    console.log('📅 filtrarFeriadosPorIntervalo - Fechas convertidas a YYYY-MM-DD:', {
+        fechaDesdeYYYYMMDD,
+        fechaHastaYYYYMMDD
+    });
+    
+    // Validar que fechaDesde <= fechaHasta
+    if (fechaDesdeYYYYMMDD > fechaHastaYYYYMMDD) {
+        showError('La fecha "Desde" debe ser anterior a la fecha "Hasta"');
+        return;
+    }
+    
+    // Mostrar la tabla
+    const tableContainer = document.getElementById('feriadosTableContainer');
+    if (tableContainer) {
+        tableContainer.style.display = 'block';
+    }
+    
+    const tbody = document.getElementById('feriadosTableBody');
+    if (!tbody) {
+        console.error('❌ filtrarFeriadosPorIntervalo - tbody no encontrado');
+        return;
+    }
+    
+    // Mostrar indicador de carga
+    tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px;">Buscando...</td></tr>';
+    
+    try {
+        // Consultar directamente a la BD
+        console.log(`🔍 Consultando BD: /api/feriados/bd?desde=${fechaDesdeYYYYMMDD}&hasta=${fechaHastaYYYYMMDD}`);
+        const response = await fetch(`/api/feriados/bd?desde=${fechaDesdeYYYYMMDD}&hasta=${fechaHastaYYYYMMDD}`);
+        const result = await response.json();
+        
+        console.log('📊 Resultado de BD:', {
+            success: result.success,
+            totalDatos: result.datos ? result.datos.length : 0
+        });
+        
+        if (result.success && result.datos && result.datos.length > 0) {
+            // Generar tabla con los resultados
+            generarTablaFeriados(result.datos, false);
+            console.log(`✅ filtrarFeriadosPorIntervalo - Se encontraron ${result.datos.length} registros`);
+        } else {
+            tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px;">No se encontraron registros en el rango especificado</td></tr>';
+            console.log('⚠️ filtrarFeriadosPorIntervalo - No se encontraron registros');
+        }
+    } catch (error) {
+        console.error('❌ filtrarFeriadosPorIntervalo - Error:', error);
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px; color: red;">Error al buscar datos</td></tr>';
+        showError('Error al buscar datos: ' + error.message);
+    }
+}
+
 // Inicializar inputs de fecha con formato DD/MM/AAAA
 document.addEventListener('DOMContentLoaded', () => {
     const fechaDesdeInput = document.getElementById('fechaDesdeFeriados');
@@ -293,22 +454,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // Aplicar máscara a los inputs
     if (fechaDesdeInput) {
         aplicarMascaraFecha(fechaDesdeInput);
-        // Inicializar con fecha por defecto (15 del mes actual)
-        if (!fechaDesdeInput.value) {
-            const hoy = new Date();
-            const dia15 = new Date(hoy.getFullYear(), hoy.getMonth(), 15);
-            fechaDesdeInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(dia15));
-        }
     }
     
     if (fechaHastaInput) {
         aplicarMascaraFecha(fechaHastaInput);
-        // Inicializar con fecha por defecto (15 del mes siguiente)
-        if (!fechaHastaInput.value) {
-            const hoy = new Date();
-            const dia15Siguiente = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 15);
-            fechaHastaInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(dia15Siguiente));
-        }
+    }
+    
+    // Cerrar modal al hacer clic fuera
+    const modal = document.getElementById('modalIntervalosFeriados');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                cerrarModalIntervalosFeriados();
+            }
+        });
+    }
+    
+    // Aplicar máscara a los inputs del buscador
+    const buscarDesdeInput = document.getElementById('buscarDesdeFeriados');
+    const buscarHastaInput = document.getElementById('buscarHastaFeriados');
+    
+    if (buscarDesdeInput) {
+        aplicarMascaraFecha(buscarDesdeInput);
+    }
+    
+    if (buscarHastaInput) {
+        aplicarMascaraFecha(buscarHastaInput);
     }
 });
 
@@ -386,8 +557,16 @@ function agregarFilaFeriados(item, tbody) {
 
 // Generar tabla de Feriados (solo si está vacía) o agregar solo nuevos registros (OPTIMIZADO)
 function generarTablaFeriados(datos, soloNuevos = false) {
+    console.log('📊 generarTablaFeriados - INICIO', {
+        totalDatos: datos ? datos.length : 0,
+        soloNuevos
+    });
+    
     const tbody = document.getElementById('feriadosTableBody');
-    if (!tbody) return 0;
+    if (!tbody) {
+        console.error('❌ generarTablaFeriados - tbody no encontrado');
+        return 0;
+    }
     
     if (!soloNuevos) {
         // Si no es solo nuevos, limpiar y regenerar toda la tabla
@@ -400,22 +579,31 @@ function generarTablaFeriados(datos, soloNuevos = false) {
             return fechaB - fechaA; // Orden descendente
         });
         
+        console.log(`📊 generarTablaFeriados - Datos ordenados: ${datosOrdenados.length} registros`);
+        
         // Agregar todas las filas de una vez (más eficiente)
-        datosOrdenados.forEach(item => {
+        datosOrdenados.forEach((item, index) => {
             let fecha = item.fecha || item.date || item;
             if (typeof fecha === 'string' && fecha.includes('T')) {
                 fecha = fecha.split('T')[0];
             }
             
             const nombre = item.nombre || '';
+            const fechaFormateada = formatearFechaMostrar(fecha);
+            
+            if (index < 5) { // Log solo los primeros 5 para no saturar
+                console.log(`📊 generarTablaFeriados - Item ${index + 1}: fecha="${fecha}", fechaFormateada="${fechaFormateada}", nombre="${nombre}"`);
+            }
             
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${formatearFechaMostrar(fecha)}</td>
+                <td>${fechaFormateada}</td>
                 <td>${nombre}</td>
             `;
             tbody.appendChild(row);
         });
+        
+        console.log(`✅ generarTablaFeriados - Tabla generada con ${datosOrdenados.length} filas`);
         
         return datosOrdenados.length;
     } else {

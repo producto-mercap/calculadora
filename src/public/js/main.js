@@ -172,18 +172,37 @@ function abrirDatePicker(inputId) {
         input.parentElement.appendChild(popup);
     }
     
+    // Inicializar estado si no existe
+    if (!datePickerState.currentDate || isNaN(datePickerState.currentDate.getTime())) {
+        datePickerState.currentDate = new Date();
+    }
+    
     // Parsear fecha actual del input si existe
     const fechaActual = input.value;
-    if (fechaActual && validarFechaDDMMAAAA(fechaActual)) {
-        const partes = fechaActual.split('/');
-        datePickerState.selectedDate = new Date(parseInt(partes[2]), parseInt(partes[1]) - 1, parseInt(partes[0]));
-        datePickerState.currentDate = new Date(datePickerState.selectedDate);
+    if (fechaActual && fechaActual.trim()) {
+        const partes = fechaActual.trim().split(/[-\/]/);
+        if (partes.length === 3) {
+            const año = parseInt(partes[2], 10);
+            const mes = parseInt(partes[1], 10) - 1;
+            const dia = parseInt(partes[0], 10);
+            if (!isNaN(año) && !isNaN(mes) && !isNaN(dia) && año >= 1900 && año <= 2100 && mes >= 0 && mes <= 11) {
+                datePickerState.selectedDate = new Date(año, mes, dia);
+                datePickerState.currentDate = new Date(datePickerState.selectedDate);
+            } else {
+                datePickerState.selectedDate = null;
+                datePickerState.currentDate = new Date();
+            }
+        } else {
+            datePickerState.selectedDate = null;
+            datePickerState.currentDate = new Date();
+        }
     } else {
         datePickerState.selectedDate = null;
         datePickerState.currentDate = new Date();
     }
     
     datePickerState.inputId = inputId;
+    datePickerState.mostrarSelectorAnio = false;
     
     renderizarDatePicker(popup);
     popup.style.display = 'block';
@@ -204,8 +223,19 @@ function abrirDatePicker(inputId) {
 }
 
 function renderizarDatePicker(popup) {
+    if (!datePickerState.inputId || !datePickerState.currentDate) {
+        return;
+    }
+    
     const año = datePickerState.currentDate.getFullYear();
     const mes = datePickerState.currentDate.getMonth();
+    
+    // Validar que año y mes sean válidos
+    if (isNaN(año) || isNaN(mes) || año < 1900 || año > 2100 || mes < 0 || mes > 11) {
+        console.error('Fecha inválida en datePickerState:', datePickerState.currentDate);
+        datePickerState.currentDate = new Date();
+        return;
+    }
     
     // Si está en modo selector de año, mostrar grid de años
     if (datePickerState.mostrarSelectorAnio) {
@@ -400,14 +430,17 @@ function cambiarRangoAnio(delta) {
 }
 
 function seleccionarFecha(año, mes, dia) {
+    if (!datePickerState.inputId) return;
+    
     const fecha = new Date(año, mes, dia);
     datePickerState.selectedDate = fecha;
+    datePickerState.currentDate = new Date(fecha); // Actualizar currentDate también
     
-    // Formatear como DD/MM/AAAA
+    // Formatear como DD-MM-AAAA
     const diaStr = String(dia).padStart(2, '0');
     const mesStr = String(mes + 1).padStart(2, '0');
     const añoStr = String(año);
-    const fechaFormateada = `${diaStr}/${mesStr}/${añoStr}`;
+    const fechaFormateada = `${diaStr}-${mesStr}-${añoStr}`;
     
     const input = document.getElementById(datePickerState.inputId);
     if (input) {
@@ -422,12 +455,16 @@ function seleccionarFecha(año, mes, dia) {
     if (popup) {
         popup.style.display = 'none';
     }
+    
+    // Limpiar el estado para evitar problemas al reabrir
+    datePickerState.inputId = null;
 }
 
-// Validar formato DD/MM/AAAA (función global)
+// Validar formato DD-MM-AAAA o DD/MM/AAAA (función global - acepta ambos)
 function validarFechaDDMMAAAA(fecha) {
     if (!fecha) return false;
-    const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    // Aceptar tanto DD-MM-AAAA como DD/MM/AAAA
+    const regex = /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/;
     const match = fecha.match(regex);
     if (!match) return false;
     
@@ -435,11 +472,14 @@ function validarFechaDDMMAAAA(fecha) {
     const mes = parseInt(match[2], 10);
     const año = parseInt(match[3], 10);
     
+    // Validar rangos
     if (mes < 1 || mes > 12) return false;
     if (dia < 1 || dia > 31) return false;
     if (año < 1900 || año > 2100) return false;
     
+    // Validar día según mes
     const diasPorMes = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    // Año bisiesto
     if (mes === 2 && ((año % 4 === 0 && año % 100 !== 0) || año % 400 === 0)) {
         if (dia > 29) return false;
     } else {

@@ -482,6 +482,43 @@ select.input {
     hyphens: auto;
 }
 
+/* Excepciones para columnas específicas que deben ser más angostas */
+.cashflow-table th:first-child,
+.cashflow-table td:first-child {
+    width: 30px !important;
+    max-width: 30px !important;
+    min-width: 30px !important;
+}
+
+/* Columnas específicas: Amortiz. (9), Valor Residual (10), Renta TNA (13), Acciones (última) */
+.cashflow-table th:nth-child(9),
+.cashflow-table td:nth-child(9) {
+    width: 50px !important;
+    max-width: 50px !important;
+    min-width: 50px !important;
+}
+
+.cashflow-table th:nth-child(10),
+.cashflow-table td:nth-child(10) {
+    width: 50px !important;
+    max-width: 50px !important;
+    min-width: 50px !important;
+}
+
+.cashflow-table th:nth-child(13),
+.cashflow-table td:nth-child(13) {
+    width: 50px !important;
+    max-width: 50px !important;
+    min-width: 50px !important;
+}
+
+.cashflow-table th:last-child,
+.cashflow-table td:last-child {
+    width: 40px !important;
+    max-width: 40px !important;
+    min-width: 40px !important;
+}
+
 .cashflow-table td,
 .tira-precios-table td {
     padding: 4px 2px;
@@ -490,6 +527,59 @@ select.input {
     max-width: 12ch;
     min-width: 12ch;
     overflow: hidden;
+}
+
+/* Tablas de variables (CER, TAMAR, BADLAR) y feriados - columnas autoajustadas */
+#cerTable th,
+#cerTable td,
+#tamarTable th,
+#tamarTable td,
+#badlarTable th,
+#badlarTable td,
+#feriadosTable th,
+#feriadosTable td {
+    width: auto !important;
+    max-width: none !important;
+    min-width: auto !important;
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+}
+
+/* Primera columna (Fecha) más angosta - reducida a la mitad */
+#cerTable th:first-child,
+#cerTable td:first-child,
+#tamarTable th:first-child,
+#tamarTable td:first-child,
+#badlarTable th:first-child,
+#badlarTable td:first-child,
+#feriadosTable th:first-child,
+#feriadosTable td:first-child {
+    width: auto !important;
+    min-width: 50px !important;
+    max-width: 80px !important;
+}
+
+/* Segunda columna (Valor/Nombre) más angosta - reducida a la mitad y alineada a la izquierda */
+#cerTable th:nth-child(2),
+#cerTable td:nth-child(2),
+#tamarTable th:nth-child(2),
+#tamarTable td:nth-child(2),
+#badlarTable th:nth-child(2),
+#badlarTable td:nth-child(2) {
+    width: auto !important;
+    min-width: 60px !important;
+    max-width: 100px !important;
+    text-align: left !important;
+}
+
+/* Columna Nombre en Feriados - doble de ancho */
+#feriadosTable th:nth-child(2),
+#feriadosTable td:nth-child(2) {
+    width: auto !important;
+    min-width: 120px !important;
+    max-width: 200px !important;
+    text-align: left !important;
 }
 
 .cashflow-table tr:hover,
@@ -536,6 +626,17 @@ select.input {
 
 .cashflow-table tr:hover td.flujos-column {
     background-color: rgba(76, 175, 80, 0.25); /* Verde un poco más intenso al hover */
+}
+
+/* Ocultar spinners de inputs number */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
 }
 
 .input-table {
