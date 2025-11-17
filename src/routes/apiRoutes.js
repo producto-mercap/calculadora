@@ -173,7 +173,17 @@ router.get('/cer/bd', calculadoraController.obtenerCERBD);
 router.get('/cer/fechas-existentes', calculadoraController.obtenerFechasExistentesCER);
 router.post('/cer/guardar', calculadoraController.guardarCER);
 
-// Estas rutas ya están definidas arriba antes de /feriados/:anio
+// Verificar y obtener TAMAR desde BD
+router.get('/tamar/verificar', calculadoraController.verificarTAMAR);
+router.get('/tamar/bd', calculadoraController.obtenerTAMARBD);
+router.get('/tamar/fechas-existentes', calculadoraController.obtenerFechasExistentesTAMAR);
+router.post('/tamar/guardar', calculadoraController.guardarTAMAR);
+
+// Verificar y obtener BADLAR desde BD
+router.get('/badlar/verificar', calculadoraController.verificarBADLAR);
+router.get('/badlar/bd', calculadoraController.obtenerBADLARBD);
+router.get('/badlar/fechas-existentes', calculadoraController.obtenerFechasExistentesBADLAR);
+router.post('/badlar/guardar', calculadoraController.guardarBADLAR);
 
 module.exports = router;
 

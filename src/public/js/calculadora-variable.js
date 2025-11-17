@@ -1,4 +1,4 @@
-// JavaScript para la calculadora CER
+// JavaScript para la calculadora Variable (TAMAR/BADLAR)
 
 // Contador de cupones
 let cuponCount = 0;
@@ -6,6 +6,12 @@ let cuponCount = 0;
 // Cache de feriados
 let cacheFeriados = [];
 let cacheFeriadosRango = null;
+
+// Cache de datos TAMAR/BADLAR
+let cacheTAMAR = [];
+let cacheBADLAR = [];
+let cacheTAMARRango = null;
+let cacheBADLARRango = null;
 
 // Variable global para almacenar la última TIR calculada
 let ultimaTIRCalculada = null;
@@ -41,6 +47,10 @@ function agregarCupon() {
     const cuponesExistentes = tbody.querySelectorAll('tr[data-tipo="cupon"]').length;
     const numeroCupon = cuponesExistentes + 1;
     
+    // Obtener tipo de tasa seleccionada
+    const tasaSeleccionada = document.getElementById('tasa')?.value || '';
+    const tipoTasa = tasaSeleccionada === 'badlar' ? 'badlar' : 'tamar';
+    
     row.innerHTML = `
         <td style="text-align: center; font-weight: 600; color: var(--text-primary);">${numeroCupon}</td>
         <td>
@@ -55,20 +65,21 @@ function agregarCupon() {
         <td class="autocomplete-column">
             <input type="text" class="input-table date-input fecha-final-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
         </td>
-        <td class="cer-column autocomplete-column"><input type="number" class="input-table valor-cer-inicio" step="0.0001" readonly /></td>
-        <td class="cer-column autocomplete-column"><input type="number" class="input-table valor-cer-final" step="0.0001" readonly /></td>
         <td class="autocomplete-column"><input type="number" class="input-table day-count-factor" readonly /></td>
-        <td><input type="number" class="input-table amortizacion" step="0.01" onchange="recalcularCamposCupon(this)" /></td>
+        <td><input type="number" class="input-table amortizacion" step="0.01" onchange="recalcularCamposCupon(this); recalcularFlujos(this.closest('tr'));" /></td>
         <td><input type="number" class="input-table valor-residual" step="0.01" onchange="recalcularValorResidualSiguiente(this)" /></td>
-        <td><input type="number" class="input-table amortizacion-ajustada" step="0.01" readonly /></td>
         <td><input type="text" class="input-table renta-nominal" readonly /></td>
-        <td><input type="text" class="input-table renta-tna" onchange="calcularRentaNominal(this)" onblur="convertirNumeroDecimal(this)" /></td>
-        <td><input type="text" class="input-table renta-ajustada" readonly /></td>
+        <td><input type="text" class="input-table renta-tna" onchange="calcularRentaNominal(this); recalcularFlujos(this.closest('tr'));" onblur="convertirNumeroDecimal(this)" /></td>
         <td><input type="number" class="input-table factor-actualizacion" step="0.0001" readonly /></td>
         <td><input type="number" class="input-table pagos-actualizados" step="0.01" readonly /></td>
         <td class="flujos-column"><input type="number" class="input-table flujos" step="0.01" readonly /></td>
         <td class="flujos-column"><input type="number" class="input-table flujos-desc-fecha-compra" step="0.01" readonly /></td>
-        <td>
+        <td style="display: flex; gap: 4px; align-items: center; justify-content: center;">
+            <button onclick="abrirTasaConFiltros('${tipoTasa}', ${cuponCount})" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Ver ${tipoTasa.toUpperCase()}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#5f6368">
+                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                </svg>
+            </button>
             <button onclick="eliminarCupon(${cuponCount})" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Eliminar cupón">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025">
                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -116,9 +127,8 @@ function agregarCupon() {
         }
     }
     
-    // Recalcular coeficientes CER después de agregar cupón
+    // Recalcular campos después de agregar cupón
     setTimeout(() => {
-        calcularCoeficientesCER();
         recalcularTodosCamposDependientes();
     }, 100);
     
@@ -145,12 +155,327 @@ function eliminarCupon(cuponId) {
         const row = document.querySelector(`tr[data-cupon-id="${cuponId}"]`);
         if (row) {
             row.remove();
-            // Recalcular coeficientes CER después de eliminar cupón
+            // Recalcular campos después de eliminar cupón
             setTimeout(() => {
-                calcularCoeficientesCER();
+                recalcularTodosCamposDependientes();
             }, 100);
         }
     }
+}
+
+// Cambiar fórmula seleccionada
+function cambiarFormula() {
+    const formula = document.getElementById('formula')?.value || '';
+    const rentaTNAInput = document.getElementById('rentaTNA');
+    
+    if (!rentaTNAInput) return;
+    
+    if (formula === 'tasa-fija') {
+        // Tasa fija: habilitar input manual
+        rentaTNAInput.readOnly = false;
+        rentaTNAInput.placeholder = 'Ej: 0.05';
+    } else if (formula === 'promedio-aritmetico') {
+        // Promedio aritmético: calcular automáticamente
+        rentaTNAInput.readOnly = true;
+        rentaTNAInput.placeholder = 'Se autocompleta';
+        calcularPromedioAritmetico();
+    } else {
+        // Promedio N tasas: por ahora igual que promedio aritmético
+        rentaTNAInput.readOnly = true;
+        rentaTNAInput.placeholder = 'Se autocompleta';
+        calcularPromedioAritmetico();
+    }
+}
+
+// Cambiar tasa seleccionada
+function cambiarTasa() {
+    // Recalcular promedio si la fórmula es promedio aritmético
+    const formula = document.getElementById('formula')?.value || '';
+    if (formula === 'promedio-aritmetico' || formula === 'promedio-n-tasas') {
+        calcularPromedioAritmetico();
+    }
+}
+
+// Verificar y replicar renta TNA para cupones con fecha inicio > fecha valuación
+function verificarYReplicarRentaTNA() {
+    const fechaValuacionInput = document.getElementById('fechaValuacion');
+    if (!fechaValuacionInput || !fechaValuacionInput.value) return;
+    
+    const fechaValuacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaValuacionInput.value);
+    if (!fechaValuacionStr) return;
+    
+    const fechaValuacionDate = crearFechaDesdeString(fechaValuacionStr);
+    if (!fechaValuacionDate) return;
+    
+    const rows = document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]');
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const fechaInicioInput = row.querySelector('.fecha-inicio');
+        const rentaTNAInputCupon = row.querySelector('.renta-tna');
+        
+        if (!fechaInicioInput || !rentaTNAInputCupon || !fechaInicioInput.value) continue;
+        
+        const fechaInicioStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaInicioInput.value);
+        if (!fechaInicioStr) continue;
+        
+        const fechaInicioDate = crearFechaDesdeString(fechaInicioStr);
+        if (!fechaInicioDate) continue;
+        
+        // Si fecha inicio > fecha valuación y hay cupón anterior, replicar renta TNA
+        if (fechaInicioDate > fechaValuacionDate && i > 0) {
+            const cuponAnterior = rows[i - 1];
+            const rentaTNAAnterior = cuponAnterior.querySelector('.renta-tna');
+            if (rentaTNAAnterior && rentaTNAAnterior.value) {
+                rentaTNAInputCupon.value = rentaTNAAnterior.value;
+                calcularRentaNominal(rentaTNAInputCupon);
+                recalcularFlujos(row);
+                console.log(`🔄 verificarYReplicarRentaTNA - Cupón ${i + 1}: Renta TNA replicada del cupón anterior`);
+            }
+        }
+    }
+}
+
+// Calcular renta TNA con spread
+function calcularRentaTNAConSpread() {
+    const spreadInput = document.getElementById('spread');
+    const rentaTNAInput = document.getElementById('rentaTNA');
+    
+    if (!spreadInput || !rentaTNAInput) return;
+    
+    const spread = parseFloat(spreadInput.value) || 0;
+    const rentaTNAActual = parseFloat(rentaTNAInput.value) || 0;
+    
+    // Si hay spread, sumarlo a la renta TNA
+    if (spread !== 0 && rentaTNAActual !== 0) {
+        const nuevaRentaTNA = rentaTNAActual + spread;
+        rentaTNAInput.value = nuevaRentaTNA.toFixed(8);
+        
+        // Recalcular renta nominal en todos los cupones
+        const rows = document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]');
+        rows.forEach(row => {
+            const rentaTNAInputCupon = row.querySelector('.renta-tna');
+            if (rentaTNAInputCupon) {
+                calcularRentaNominal(rentaTNAInputCupon);
+            }
+        });
+    }
+}
+
+// Calcular promedio aritmético de TAMAR/BADLAR
+async function calcularPromedioAritmetico() {
+    const formula = document.getElementById('formula')?.value || '';
+    const tasa = document.getElementById('tasa')?.value || '';
+    const intervaloInicio = parseInt(document.getElementById('intervaloInicio')?.value) || 0;
+    const intervaloFin = parseInt(document.getElementById('intervaloFin')?.value) || 0;
+    const rentaTNAInput = document.getElementById('rentaTNA');
+    
+    if (!formula || !tasa || !rentaTNAInput) return;
+    
+    if (formula !== 'promedio-aritmetico' && formula !== 'promedio-n-tasas') return;
+    
+    // Obtener todas las filas de cupones
+    const rows = document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]');
+    
+    if (rows.length === 0) return;
+    
+    // Obtener fecha de valuación para comparar
+    const fechaValuacionInput = document.getElementById('fechaValuacion');
+    let fechaValuacionDate = null;
+    if (fechaValuacionInput && fechaValuacionInput.value) {
+        const fechaValuacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaValuacionInput.value);
+        if (fechaValuacionStr) {
+            fechaValuacionDate = crearFechaDesdeString(fechaValuacionStr);
+        }
+    }
+    
+    // Calcular promedio para cada cupón
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const fechaInicioInput = row.querySelector('.fecha-inicio');
+        const fechaInicioCERInput = row.querySelector('.fecha-inicio-cer');
+        const fechaFinalCERInput = row.querySelector('.fecha-final-cer');
+        const rentaTNAInputCupon = row.querySelector('.renta-tna');
+        
+        if (!fechaInicioInput || !fechaInicioCERInput || !fechaFinalCERInput || !rentaTNAInputCupon) continue;
+        
+        const fechaInicio = fechaInicioInput.value;
+        const fechaInicioCER = fechaInicioCERInput.value;
+        const fechaFinalCER = fechaFinalCERInput.value;
+        
+        if (!fechaInicio) continue;
+        
+        // Verificar si fecha de inicio del cupón es mayor que fecha de valuación
+        const fechaInicioDate = crearFechaDesdeString(convertirFechaDDMMAAAAaYYYYMMDD(fechaInicio));
+        const debeReplicar = fechaValuacionDate && fechaInicioDate && fechaInicioDate > fechaValuacionDate;
+        
+        if (debeReplicar && i > 0) {
+            // Replicar renta TNA del cupón anterior
+            const cuponAnterior = rows[i - 1];
+            const rentaTNAAnterior = cuponAnterior.querySelector('.renta-tna');
+            if (rentaTNAAnterior && rentaTNAAnterior.value) {
+                rentaTNAInputCupon.value = rentaTNAAnterior.value;
+                calcularRentaNominal(rentaTNAInputCupon);
+                console.log(`🔄 calcularPromedioAritmetico - Cupón ${i + 1}: Renta TNA replicada del cupón anterior (fecha inicio > fecha valuación)`);
+                continue;
+            }
+        }
+        
+        // Si no hay fechas CER, no se puede calcular el promedio
+        if (!fechaInicioCER || !fechaFinalCER) continue;
+        
+        // Convertir fechas de DD/MM/AAAA a YYYY-MM-DD (igual que en la lupa)
+        // La lupa usa las fechas SIN ajustar, así que usamos las fechas originales
+        const fechaDesdeStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaInicioCER);
+        const fechaHastaStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaFinalCER);
+        
+        if (!fechaDesdeStr || !fechaHastaStr) continue;
+        
+        console.log(`📊 calcularPromedioAritmetico - Intervalo: ${fechaInicioCER} a ${fechaFinalCER} (${fechaDesdeStr} a ${fechaHastaStr})`);
+        
+        // Obtener valores usando las fechas originales (igual que la lupa)
+        let valores = [];
+        if (tasa === 'badlar') {
+            valores = await obtenerValoresBADLAR(fechaDesdeStr, fechaHastaStr);
+        } else if (tasa === 'tamar') {
+            valores = await obtenerValoresTAMAR(fechaDesdeStr, fechaHastaStr);
+        }
+        
+        if (valores.length === 0) {
+            console.warn('⚠️ No se encontraron valores de', tasa.toUpperCase(), 'para el intervalo');
+            continue;
+        }
+        
+        // Calcular promedio aritmético (igual que en tamar.js/badlar.js)
+        // Filtrar valores null/undefined antes de calcular
+        const valoresValidos = valores.filter(item => {
+            const valor = item.valor;
+            return valor !== null && valor !== undefined && !isNaN(parseFloat(valor));
+        });
+        
+        if (valoresValidos.length === 0) {
+            console.warn('⚠️ No hay valores válidos para calcular el promedio');
+            continue;
+        }
+        
+        // Sumar solo valores válidos (igual que en tamar.js)
+        let suma = 0;
+        valoresValidos.forEach(item => {
+            suma += parseFloat(item.valor);
+        });
+        
+        const promedio = suma / valoresValidos.length;
+        
+        // Aplicar spread si existe
+        const spread = parseFloat(document.getElementById('spread')?.value) || 0;
+        const rentaTNA = promedio + spread;
+        
+        // Actualizar renta TNA del cupón
+        rentaTNAInputCupon.value = rentaTNA.toFixed(8);
+        
+        // Recalcular renta nominal
+        calcularRentaNominal(rentaTNAInputCupon);
+    }
+    
+    // Actualizar renta TNA global con el promedio del primer cupón (si existe)
+    if (rows.length > 0) {
+        const primerCupon = rows[0];
+        const rentaTNACupon = primerCupon.querySelector('.renta-tna');
+        if (rentaTNACupon && rentaTNACupon.value) {
+            rentaTNAInput.value = rentaTNACupon.value;
+        }
+    }
+}
+
+// Obtener valores TAMAR desde cache o API
+async function obtenerValoresTAMAR(fechaDesde, fechaHasta) {
+    // Verificar cache primero
+    if (cacheTAMARRango && 
+        cacheTAMARRango.desde <= fechaDesde && 
+        cacheTAMARRango.hasta >= fechaHasta &&
+        cacheTAMAR.length > 0) {
+        return cacheTAMAR.filter(item => {
+            const fechaItem = item.fecha.split('T')[0];
+            // Incluir solo fechas dentro del rango (>= y <= para incluir los extremos del rango ajustado)
+            return fechaItem >= fechaDesde && fechaItem <= fechaHasta;
+        });
+    }
+    
+    // Si no hay cache, obtener desde API
+    try {
+        const response = await fetch(`/api/tamar?desde=${encodeURIComponent(fechaDesde)}&hasta=${encodeURIComponent(fechaHasta)}`);
+        const result = await response.json();
+        
+        if (result.success && result.datos) {
+            // Actualizar cache
+            cacheTAMAR = result.datos;
+            cacheTAMARRango = { desde: fechaDesde, hasta: fechaHasta };
+            return result.datos;
+        }
+    } catch (error) {
+        console.error('Error al obtener TAMAR:', error);
+    }
+    
+    return [];
+}
+
+// Obtener valores BADLAR desde cache o API
+async function obtenerValoresBADLAR(fechaDesde, fechaHasta) {
+    // Verificar cache primero
+    if (cacheBADLARRango && 
+        cacheBADLARRango.desde <= fechaDesde && 
+        cacheBADLARRango.hasta >= fechaHasta &&
+        cacheBADLAR.length > 0) {
+        return cacheBADLAR.filter(item => {
+            const fechaItem = item.fecha.split('T')[0];
+            // Incluir solo fechas dentro del rango (>= y <= para incluir los extremos del rango ajustado)
+            return fechaItem >= fechaDesde && fechaItem <= fechaHasta;
+        });
+    }
+    
+    // Si no hay cache, obtener desde API
+    try {
+        const response = await fetch(`/api/badlar?desde=${encodeURIComponent(fechaDesde)}&hasta=${encodeURIComponent(fechaHasta)}`);
+        const result = await response.json();
+        
+        if (result.success && result.datos) {
+            // Actualizar cache
+            cacheBADLAR = result.datos;
+            cacheBADLARRango = { desde: fechaDesde, hasta: fechaHasta };
+            return result.datos;
+        }
+    } catch (error) {
+        console.error('Error al obtener BADLAR:', error);
+    }
+    
+    return [];
+}
+
+// Abrir página TAMAR/BADLAR con filtros desde un cupón
+function abrirTasaConFiltros(tipoTasa, cuponId) {
+    const row = document.querySelector(`tr[data-cupon-id="${cuponId}"]`);
+    if (!row) return;
+    
+    const fechaInicioCERInput = row.querySelector('.fecha-inicio-cer');
+    const fechaFinalCERInput = row.querySelector('.fecha-final-cer');
+    
+    if (!fechaInicioCERInput || !fechaFinalCERInput || !fechaInicioCERInput.value || !fechaFinalCERInput.value) {
+        alert('Complete las fechas de intervalo primero');
+        return;
+    }
+    
+    // Convertir fechas de DD/MM/AAAA a DD-MM-AAAA (formato usado en las páginas TAMAR/BADLAR)
+    const fechaDesde = fechaInicioCERInput.value.replace(/\//g, '-');
+    const fechaHasta = fechaFinalCERInput.value.replace(/\//g, '-');
+    
+    // Guardar las fechas en sessionStorage para que se establezcan al cargar la página
+    sessionStorage.setItem(`${tipoTasa}_fechaDesde`, fechaDesde);
+    sessionStorage.setItem(`${tipoTasa}_fechaHasta`, fechaHasta);
+    sessionStorage.setItem(`${tipoTasa}_autoFiltrar`, 'true');
+    
+    // Redirigir a la página correspondiente
+    const url = `/${tipoTasa}`;
+    window.open(url, '_blank');
 }
 
 // Obtener meses según periodicidad
@@ -359,6 +684,38 @@ function calcularDayCountFactor(input) {
     // Usar calcularFraccionAnio que ya implementa todas las bases correctamente
     const factor = calcularFraccionAnio(fechaInicio, fechaLiquidacion, tipoInteresDias);
     dayCountFactorInput.value = factor.toFixed(12);
+    
+    // Verificar si fecha inicio > fecha valuación y replicar renta TNA del cupón anterior
+    if (row.getAttribute('data-tipo') === 'cupon') {
+        const fechaValuacionInput = document.getElementById('fechaValuacion');
+        if (fechaValuacionInput && fechaValuacionInput.value) {
+            const fechaValuacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaValuacionInput.value);
+            if (fechaValuacionStr) {
+                const fechaValuacionDate = crearFechaDesdeString(fechaValuacionStr);
+                const fechaInicioDate = crearFechaDesdeString(fechaInicio);
+                
+                if (fechaValuacionDate && fechaInicioDate && fechaInicioDate > fechaValuacionDate) {
+                    // Buscar el cupón anterior
+                    const allRows = Array.from(document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]'));
+                    const currentIndex = allRows.indexOf(row);
+                    
+                    if (currentIndex > 0) {
+                        const cuponAnterior = allRows[currentIndex - 1];
+                        const rentaTNAAnterior = cuponAnterior.querySelector('.renta-tna');
+                        const rentaTNAInputCupon = row.querySelector('.renta-tna');
+                        
+                        if (rentaTNAAnterior && rentaTNAAnterior.value && rentaTNAInputCupon) {
+                            rentaTNAInputCupon.value = rentaTNAAnterior.value;
+                            calcularRentaNominal(rentaTNAInputCupon);
+                            recalcularFlujos(row);
+                            console.log(`🔄 calcularDayCountFactor - Cupón ${currentIndex + 1}: Renta TNA replicada del cupón anterior (fecha inicio > fecha valuación)`);
+                            return; // Salir temprano ya que no necesitamos recalcular renta nominal de nuevo
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     // Recalcular renta nominal si hay renta TNA
     const rentaTNAInput = row.querySelector('.renta-tna');
@@ -1005,10 +1362,6 @@ function calcularFechasCER() {
                 console.warn(`⚠️ calcularFechasCER - No se pudo calcular Final Intervalo`);
             }
             
-            // Buscar y autocompletar valores CER siempre (se calculan automáticamente)
-            const valorCERInicioInput = row.querySelector('.valor-cer-inicio');
-            const valorCERFinalInput = row.querySelector('.valor-cer-final');
-            
             console.log('🔍 calcularFechasCER - Procesando fila:', {
                 fechaInicio: fechaInicioInput?.value,
                 fechaLiquidacion: fechaLiquidacionInput?.value,
@@ -1016,37 +1369,15 @@ function calcularFechasCER() {
                 fechaFinalCER: fechaFinalCER ? formatearFechaInput(fechaFinalCER) : null
             });
             
-            if (fechaInicioCER && valorCERInicioInput) {
-                // Siempre autocompletar basándose en la fecha calculada
-                const fechaInicioCERStr = formatearFechaInput(fechaInicioCER);
-                console.log('🔍 calcularFechasCER - Buscando CER Inicio para:', fechaInicioCERStr);
-                const cerInicio = obtenerValorCER(fechaInicioCERStr);
-                if (cerInicio !== null) {
-                    const valorTruncado = window.truncarDecimal ? window.truncarDecimal(cerInicio, 8) : parseFloat(cerInicio.toFixed(8));
-                    valorCERInicioInput.value = valorTruncado;
-                    console.log('✅ calcularFechasCER - CER Inicio asignado:', valorTruncado);
-                } else {
-                    valorCERInicioInput.value = '';
-                    console.warn('⚠️ calcularFechasCER - No se encontró CER Inicio para:', fechaInicioCERStr);
-                }
-            }
-            
-            if (fechaFinalCER && valorCERFinalInput) {
-                // Siempre autocompletar basándose en la fecha calculada
-                const fechaFinalCERStr = formatearFechaInput(fechaFinalCER);
-                console.log('🔍 calcularFechasCER - Buscando CER Final para:', fechaFinalCERStr);
-                const cerFinal = obtenerValorCER(fechaFinalCERStr);
-                if (cerFinal !== null) {
-                    const valorTruncado = window.truncarDecimal ? window.truncarDecimal(cerFinal, 8) : parseFloat(cerFinal.toFixed(8));
-                    valorCERFinalInput.value = valorTruncado;
-                    console.log('✅ calcularFechasCER - CER Final asignado:', valorTruncado);
-                    // Recalcular coeficientes CER cuando se actualiza un valor CER final
+            // En calculadora variable, no se autocompletan valores CER, solo se calculan las fechas
+            // Las fechas se usan para calcular el promedio aritmético de TAMAR/BADLAR
+            if (fechaInicioCER && fechaFinalCER) {
+                // Recalcular promedio aritmético si la fórmula lo requiere
+                const formula = document.getElementById('formula')?.value || '';
+                if (formula === 'promedio-aritmetico' || formula === 'promedio-n-tasas') {
                     setTimeout(() => {
-                        calcularCoeficientesCER();
-                    }, 50);
-                } else {
-                    valorCERFinalInput.value = '';
-                    console.warn('⚠️ calcularFechasCER - No se encontró CER Final para:', fechaFinalCERStr);
+                        calcularPromedioAritmetico();
+                    }, 100);
                 }
             }
             
@@ -1173,12 +1504,12 @@ function calcularCoeficientesCER() {
     if (rows.length > 0) {
         // Obtener el último cupón (último en el DOM)
         const ultimaRow = rows[rows.length - 1];
-        const valorCERFinalInput = ultimaRow.querySelector('.valor-cer-final');
-        if (valorCERFinalInput && valorCERFinalInput.value) {
-            valorCERFinalUltimoCupon = parseFloat(valorCERFinalInput.value);
-            console.log('📊 calcularCoeficientesCER - Valor CER Final último cupón:', valorCERFinalUltimoCupon);
+        const fechaFinalCERInput = ultimaRow.querySelector('.fecha-final-cer');
+        if (fechaFinalCERInput && fechaFinalCERInput.value) {
+            // En calculadora variable, no hay valor CER final, solo fecha final
+            console.log('📊 calcularCoeficientesCER - Fecha Final CER último cupón:', fechaFinalCERInput.value);
         } else {
-            console.log('⚠️ calcularCoeficientesCER - No hay valor CER final en el último cupón');
+            console.log('⚠️ calcularCoeficientesCER - No hay fecha final CER en el último cupón');
         }
     } else {
         console.log('⚠️ calcularCoeficientesCER - No hay cupones en la tabla');
@@ -1533,12 +1864,9 @@ function recalcularFlujos(row) {
     }
     
     if (tipo === 'inversion') {
-        // Flujos inversión: -(Cantidad partida × Precio partida × Coeficiente CER Compra) (negativo)
-        const coeficienteCERCompraDiv = document.getElementById('coeficienteCERCompra');
-        const coeficienteCERCompra = parseFloat(coeficienteCERCompraDiv?.textContent) || 0;
-        
-        if (coeficienteCERCompra > 0 && cantidadPartida > 0 && precioCompra > 0) {
-            const flujos = -(cantidadPartida * precioCompra * coeficienteCERCompra); // Negativo
+        // Flujos inversión: -(Precio compra × Cantidad partida) (negativo)
+        if (cantidadPartida > 0 && precioCompra > 0) {
+            const flujos = -(precioCompra * cantidadPartida); // Negativo
             const valorTruncado = window.truncarDecimal ? window.truncarDecimal(flujos, 12) : parseFloat(flujos.toFixed(12));
             flujosInput.value = valorTruncado;
             if (DEBUG_FLUJOS) {
@@ -1549,11 +1877,11 @@ function recalcularFlujos(row) {
             console.warn('⚠️ recalcularFlujos - Faltan datos para calcular flujo inversión');
         }
     } else if (tipo === 'cupon') {
-        // Flujos cupones: Cantidad partida × (Amortiz ajustada / 100 + Renta ajustada / 100)
-        const amortizacionAjustada = parseFloat(row.querySelector('.amortizacion-ajustada')?.value) || 0;
-        const rentaAjustada = parseFloat(row.querySelector('.renta-ajustada')?.value) || 0;
+        // Flujos cupones: Cantidad partida × (Renta nominal / 100 + Amortización / 100)
+        const rentaNominal = parseFloat(row.querySelector('.renta-nominal')?.value) || 0;
+        const amortizacion = parseFloat(row.querySelector('.amortizacion')?.value) || 0;
         
-        const flujos = cantidadPartida * (amortizacionAjustada / 100 + rentaAjustada / 100);
+        const flujos = cantidadPartida * (rentaNominal / 100 + amortizacion / 100);
         const valorTruncado = window.truncarDecimal ? window.truncarDecimal(flujos, 12) : parseFloat(flujos.toFixed(12));
         flujosInput.value = valorTruncado;
     }
@@ -2020,14 +2348,14 @@ function calcularPrecioTecnicoVencimiento() {
         return;
     }
     
-    // Calcular: amortización ajustada / 100 + renta ajustada / 100
-    const amortizacionAjustadaInput = ultimaRow.querySelector('.amortizacion-ajustada');
-    const rentaAjustadaInput = ultimaRow.querySelector('.renta-ajustada');
+    // Calcular: renta nominal / 100 + amortización / 100
+    const rentaNominalInput = ultimaRow.querySelector('.renta-nominal');
+    const amortizacionInput = ultimaRow.querySelector('.amortizacion');
     
-    const amortizacionAjustada = parseFloat(amortizacionAjustadaInput?.value) || 0;
-    const rentaAjustada = parseFloat(convertirNumeroDecimal(rentaAjustadaInput?.value)) || 0;
+    const rentaNominal = parseFloat(rentaNominalInput?.value) || 0;
+    const amortizacion = parseFloat(amortizacionInput?.value) || 0;
     
-    const precioTecnicoVenc = (amortizacionAjustada / 100) + (rentaAjustada / 100);
+    const precioTecnicoVenc = (rentaNominal / 100) + (amortizacion / 100);
     const valorTruncado = window.truncarDecimal ? window.truncarDecimal(precioTecnicoVenc, 12) : parseFloat(precioTecnicoVenc.toFixed(12));
     
     if (precioTecnicoVencimientoDiv) {
@@ -2471,6 +2799,10 @@ async function autocompletarCupones() {
             const fechaInicioDDMM = convertirFechaYYYYMMDDaDDMMAAAA(fechaInicioStr);
             const fechaLiquidacionDDMM = convertirFechaYYYYMMDDaDDMMAAAA(fechaLiquidacionStr);
             
+            // Obtener tipo de tasa seleccionada
+            const tasaSeleccionada = document.getElementById('tipoTasa')?.value || '';
+            const tipoTasa = tasaSeleccionada === 'badlar' ? 'badlar' : 'tamar';
+            
             row.innerHTML = `
                 <td style="text-align: center; font-weight: 600; color: var(--text-primary);">${numeroCupon}</td>
                 <td>
@@ -2485,22 +2817,23 @@ async function autocompletarCupones() {
                 <td>
                     <input type="text" class="input-table date-input fecha-final-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
                 </td>
-                <td class="cer-column"><input type="number" class="input-table valor-cer-inicio" step="0.0001" readonly /></td>
-                <td class="cer-column"><input type="number" class="input-table valor-cer-final" step="0.0001" readonly /></td>
                 <td><input type="number" class="input-table day-count-factor" readonly /></td>
                 <td><input type="number" class="input-table amortizacion" step="0.01" /></td>
                 <td><input type="number" class="input-table valor-residual" step="0.01" /></td>
-                <td><input type="number" class="input-table amortizacion-ajustada" step="0.01" readonly /></td>
                 <td><input type="text" class="input-table renta-nominal" step="0.01" readonly /></td>
-                <td><input type="text" class="input-table renta-tna" onchange="calcularRentaNominal(this)" /></td>
-                <td><input type="text" class="input-table renta-ajustada" step="0.01" readonly /></td>
+                <td><input type="text" class="input-table renta-tna" onchange="calcularRentaNominal(this); recalcularFlujos(this.closest('tr'));" /></td>
                 <td><input type="number" class="input-table factor-actualizacion" step="0.0001" readonly /></td>
                 <td><input type="number" class="input-table pagos-actualizados" step="0.01" readonly /></td>
                 <td class="flujos-column"><input type="number" class="input-table flujos" step="0.01" readonly /></td>
                 <td class="flujos-column"><input type="number" class="input-table flujos-desc-fecha-compra" step="0.01" readonly /></td>
-                <td>
-                    <button onclick="eliminarCupon(${cuponCount})" class="btn" style="min-width: auto; padding: 6px 12px; height: 32px;" title="Eliminar cupón">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <td style="display: flex; gap: 4px; align-items: center; justify-content: center;">
+                    <button onclick="abrirTasaConFiltros('${tipoTasa}', ${cuponCount})" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Ver ${tipoTasa.toUpperCase()}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#5f6368">
+                            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                        </svg>
+                    </button>
+                    <button onclick="eliminarCupon(${cuponCount})" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Eliminar cupón">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025">
                             <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                         </svg>
                     </button>
@@ -2583,17 +2916,52 @@ async function autocompletarCupones() {
         });
         
         // Autocompletar Renta TNA en todos los cupones
+        // Primero verificar si hay cupones con fecha inicio > fecha valuación para replicar
+        const fechaValuacionInput = document.getElementById('fechaValuacion');
+        let fechaValuacionDate = null;
+        if (fechaValuacionInput && fechaValuacionInput.value) {
+            const fechaValuacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaValuacionInput.value);
+            if (fechaValuacionStr) {
+                fechaValuacionDate = crearFechaDesdeString(fechaValuacionStr);
+            }
+        }
+        
         const rentaTNAInput = document.getElementById('rentaTNA');
         if (rentaTNAInput && rentaTNAInput.value) {
             const rentaTNA = rentaTNAInput.value;
-            rows.forEach(row => {
+            rows.forEach((row, index) => {
                 const rentaTNAInputCupon = row.querySelector('.renta-tna');
-                if (rentaTNAInputCupon) {
-                    rentaTNAInputCupon.value = rentaTNA;
-                    // Disparar el evento change para calcular renta nominal
-                    calcularRentaNominal(rentaTNAInputCupon);
+                const fechaInicioInput = row.querySelector('.fecha-inicio');
+                
+                if (!rentaTNAInputCupon) return;
+                
+                // Verificar si fecha inicio > fecha valuación
+                if (fechaValuacionDate && fechaInicioInput && fechaInicioInput.value && index > 0) {
+                    const fechaInicioStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaInicioInput.value);
+                    if (fechaInicioStr) {
+                        const fechaInicioDate = crearFechaDesdeString(fechaInicioStr);
+                        if (fechaInicioDate && fechaInicioDate > fechaValuacionDate) {
+                            // Replicar del cupón anterior
+                            const cuponAnterior = rows[index - 1];
+                            const rentaTNAAnterior = cuponAnterior.querySelector('.renta-tna');
+                            if (rentaTNAAnterior && rentaTNAAnterior.value) {
+                                rentaTNAInputCupon.value = rentaTNAAnterior.value;
+                                calcularRentaNominal(rentaTNAInputCupon);
+                                return;
+                            }
+                        }
+                    }
                 }
+                
+                // Si no se replicó, usar el valor global
+                rentaTNAInputCupon.value = rentaTNA;
+                calcularRentaNominal(rentaTNAInputCupon);
             });
+        } else {
+            // Si no hay renta TNA global, verificar si hay cupones que necesitan replicar
+            if (fechaValuacionDate) {
+                verificarYReplicarRentaTNA();
+            }
         }
         
         // Autocompletar amortización: 0 en todos, 100 en el último
@@ -2713,28 +3081,29 @@ function obtenerDatosCashflow() {
             // Log para debug
             console.log(`🔍 obtenerDatosCashflow - Inversión: flujosInput=${flujosInput?.value}, flujos=${rowData.flujos}`);
         } else {
-            const valorCERInicioInput = row.querySelector('.valor-cer-inicio');
-            const valorCERFinalInput = row.querySelector('.valor-cer-final');
-            
             // Usar selectores de clase en lugar de índices para mayor robustez
             const flujosInput = row.querySelector('.flujos');
             const flujosDescFechaCompraInput = row.querySelector('.flujos-desc-fecha-compra');
+            
+            // Obtener valores usando selectores de clase para mayor robustez
+            const amortizacionInput = row.querySelector('.amortizacion');
+            const valorResidualInput = row.querySelector('.valor-residual');
+            const rentaNominalInput = row.querySelector('.renta-nominal');
+            const rentaTNAInput = row.querySelector('.renta-tna');
+            const factorActualizacionInput = row.querySelector('.factor-actualizacion');
+            const pagosActualizadosInput = row.querySelector('.pagos-actualizados');
             
             rowData = {
                 tipo: tipo,
                 fechaInicio: fechaInicio,
                 fechaLiquidacion: fechaLiquidacion,
-                // No guardar fechaInicioCER, fechaFinalCER, valorCER, valorCERFinal, dayCountFactor - se autocompletan
-                // Estructura de inputs: [0]fechaInicio, [1]fechaLiquidacion, [2]fechaInicioCER, [3]fechaFinalCER, 
-                // [4]valorCERInicio, [5]valorCERFinal, [6]dayCountFactor, [7]amortizacion, [8]valorResidual, [9]amortizacionAjustada
-                amortizacion: parseFloat(inputs[7]?.value) || 0,
-                valorResidual: parseFloat(inputs[8]?.value) || 0,
-                amortizacionAjustada: parseFloat(inputs[9]?.value) || 0,
-                rentaNominal: parseFloat(row.querySelector('.renta-nominal')?.value) || 0,
-                rentaTNA: parseFloat(row.querySelector('.renta-tna')?.value) || 0,
-            rentaAjustada: parseFloat(inputs[11]?.value) || 0,
-            factorActualizacion: parseFloat(inputs[12]?.value) || 0,
-            pagosActualizados: parseFloat(inputs[13]?.value) || 0,
+                // No guardar fechaInicioCER, fechaFinalCER, dayCountFactor - se autocompletan
+                amortizacion: parseFloat(amortizacionInput?.value) || 0,
+                valorResidual: parseFloat(valorResidualInput?.value) || 0,
+                rentaNominal: parseFloat(rentaNominalInput?.value) || 0,
+                rentaTNA: parseFloat(rentaTNAInput?.value) || 0,
+                factorActualizacion: parseFloat(factorActualizacionInput?.value) || 0,
+                pagosActualizados: parseFloat(pagosActualizadosInput?.value) || 0,
                 flujos: parseFloat(flujosInput?.value) || 0,
                 flujosDescFechaCompra: parseFloat(flujosDescFechaCompraInput?.value) || 0
             };
@@ -2744,8 +3113,8 @@ function obtenerDatosCashflow() {
         }
         
         // Truncar valores decimales a 12 decimales para campos específicos que afectan TIR
-        const camposPrecision12 = ['dayCountFactor', 'amortizacionAjustada', 'rentaNominal', 'rentaTNA', 'rentaAjustada', 
-                                   'factorActualizacion', 'pagosActualizados', 'flujos', 'flujosDescFechaCompra'];
+        const camposPrecision12 = ['amortizacion', 'rentaNominal', 'rentaTNA', 'factorActualizacion', 
+                                   'pagosActualizados', 'flujos', 'flujosDescFechaCompra'];
         Object.keys(rowData).forEach(key => {
             if (typeof rowData[key] === 'number' && !isNaN(rowData[key]) && rowData[key] !== 0) {
                 // Usar 12 decimales para campos que afectan TIR, 8 para el resto
@@ -2834,7 +3203,18 @@ function obtenerDatosEspecie() {
         fechaAmortizacion: fechaAmortizacion,
         intervaloInicio: parseInt(document.getElementById('intervaloInicio')?.value) || 0,
         intervaloFin: parseInt(document.getElementById('intervaloFin')?.value) || 0,
-        tipoCalculadora: 'cer'
+        formula: document.getElementById('formula')?.value || '',
+        tasa: document.getElementById('tasa')?.value || '',
+        spread: (() => {
+            const spreadValue = document.getElementById('spread')?.value;
+            if (spreadValue === '' || spreadValue === null || spreadValue === undefined) {
+                return null;
+            }
+            const parsed = parseFloat(spreadValue);
+            return isNaN(parsed) ? null : parsed;
+        })(),
+        rentaTNA: parseFloat(document.getElementById('rentaTNA')?.value) || 0,
+        tipoCalculadora: 'variable'
     };
 }
 
@@ -3444,7 +3824,7 @@ function recopilarDatosCalculadora() {
         
         // Metadatos
         fechaCreacion: new Date().toISOString(),
-        tipo: 'calculadora-cer'
+        tipo: 'calculadora-variable'
     };
     
     return datos;
@@ -3524,7 +3904,7 @@ async function pedirTituloModal() {
         // Cargar lista de calculadoras existentes
         let calculadorasExistentes = [];
         try {
-            const response = await fetch('/api/calculadora/listar?tipo=cer');
+            const response = await fetch('/api/calculadora/listar?tipo=variable');
             const result = await response.json();
             if (result.success && result.calculadoras) {
                 // Agrupar calculadoras por título para evitar duplicados
@@ -3782,7 +4162,7 @@ async function cargarListaCalculadoras() {
         const inicioTiempo = performance.now();
         
         // Endpoint optimizado: solo devuelve títulos, ticker y fechas (sin datos completos)
-        const response = await fetch('/api/calculadora/listar');
+        const response = await fetch('/api/calculadora/listar?tipo=variable');
         const result = await response.json();
         
         const tiempoCarga = performance.now() - inicioTiempo;
@@ -4019,6 +4399,32 @@ async function cargarCalculadora(titulo) {
                 const intervaloFinInput = document.getElementById('intervaloFin');
                 if (intervaloFinInput) intervaloFinInput.value = datos.datosEspecie.intervalo_fin;
             }
+            if (datos.datosEspecie.formula) {
+                const formulaInput = document.getElementById('formula');
+                if (formulaInput) {
+                    formulaInput.value = datos.datosEspecie.formula;
+                    cambiarFormula(); // Aplicar cambios según la fórmula
+                }
+            }
+            if (datos.datosEspecie.tasa) {
+                const tasaInput = document.getElementById('tasa');
+                if (tasaInput) {
+                    tasaInput.value = datos.datosEspecie.tasa;
+                    cambiarTasa(); // Aplicar cambios según la tasa
+                }
+            }
+            if (datos.datosEspecie.renta_tna !== undefined) {
+                const rentaTNAInput = document.getElementById('rentaTNA');
+                if (rentaTNAInput) {
+                    rentaTNAInput.value = datos.datosEspecie.renta_tna || '';
+                }
+            }
+            if (datos.datosEspecie.spread !== undefined && datos.datosEspecie.spread !== null) {
+                const spreadInput = document.getElementById('spread');
+                if (spreadInput) {
+                    spreadInput.value = datos.datosEspecie.spread || '';
+                }
+            }
         }
         
         // Cargar cashflow (cupones y fila de inversión)
@@ -4066,6 +4472,10 @@ async function cargarCalculadora(titulo) {
                 const fechaInicioStr = convertirFechaYYYYMMDDaDDMMAAAA(cupon.fecha_inicio);
                 const fechaLiquidacionStr = convertirFechaYYYYMMDDaDDMMAAAA(cupon.fecha_liquidacion);
                 
+                // Obtener tipo de tasa seleccionada
+                const tasaSeleccionada = document.getElementById('tipoTasa')?.value || '';
+                const tipoTasa = tasaSeleccionada === 'badlar' ? 'badlar' : 'tamar';
+                
                 // Calcular número de cupón (basado en el índice en el array de cupones)
                 const numeroCupon = cupones.indexOf(cupon) + 1;
                 
@@ -4083,20 +4493,21 @@ async function cargarCalculadora(titulo) {
                     <td class="autocomplete-column">
                         <input type="text" class="input-table date-input fecha-final-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
                     </td>
-                    <td class="cer-column autocomplete-column"><input type="number" class="input-table valor-cer-inicio" step="0.0001" readonly /></td>
-                    <td class="cer-column autocomplete-column"><input type="number" class="input-table valor-cer-final" step="0.0001" readonly /></td>
                     <td class="autocomplete-column"><input type="number" class="input-table day-count-factor" readonly /></td>
-                    <td><input type="number" class="input-table amortizacion" step="0.01" value="${cupon.amortizacion || ''}" onchange="recalcularCamposCupon(this)" /></td>
+                    <td><input type="number" class="input-table amortizacion" step="0.01" value="${cupon.amortizacion || ''}" onchange="recalcularCamposCupon(this); recalcularFlujos(this.closest('tr'));" /></td>
                     <td><input type="number" class="input-table valor-residual" step="0.01" onchange="recalcularValorResidualSiguiente(this)" /></td>
-                    <td><input type="number" class="input-table amortizacion-ajustada" step="0.01" readonly /></td>
                     <td><input type="text" class="input-table renta-nominal" readonly /></td>
-                    <td><input type="text" class="input-table renta-tna" value="${cupon.renta_tna || ''}" onchange="calcularRentaNominal(this)" onblur="convertirNumeroDecimal(this)" /></td>
-                    <td><input type="text" class="input-table renta-ajustada" readonly /></td>
+                    <td><input type="text" class="input-table renta-tna" value="${cupon.renta_tna || ''}" onchange="calcularRentaNominal(this); recalcularFlujos(this.closest('tr'));" onblur="convertirNumeroDecimal(this)" /></td>
                     <td><input type="number" class="input-table factor-actualizacion" step="0.0001" readonly /></td>
                     <td><input type="number" class="input-table pagos-actualizados" step="0.01" readonly /></td>
         <td class="flujos-column"><input type="number" class="input-table flujos" step="0.01" readonly /></td>
         <td class="flujos-column"><input type="number" class="input-table flujos-desc-fecha-compra" step="0.01" readonly /></td>
-                    <td>
+                    <td style="display: flex; gap: 4px; align-items: center; justify-content: center;">
+                        <button onclick="abrirTasaConFiltros('${tipoTasa}', ${cuponCount})" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Ver ${tipoTasa.toUpperCase()}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#5f6368">
+                                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                            </svg>
+                        </button>
                         <button onclick="eliminarCupon(${cuponCount})" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Eliminar cupón">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025">
                                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -4508,6 +4919,10 @@ function cargarDatosLocalStorage() {
                     const fechaInicioDDMM = convertirFechaYYYYMMDDaDDMMAAAA(cupon.fechaInicio);
                     const fechaLiquidacionDDMM = convertirFechaYYYYMMDDaDDMMAAAA(cupon.fechaLiquidacion);
                     
+                    // Obtener tipo de tasa seleccionada
+                    const tasaSeleccionada = document.getElementById('tipoTasa')?.value || '';
+                    const tipoTasa = tasaSeleccionada === 'badlar' ? 'badlar' : 'tamar';
+                    
                     // Calcular número de cupón (basado en el índice en el array de cupones)
                     const cuponesFiltrados = datos.cashflow.filter(c => c.tipo === 'cupon' && c.fechaInicio && c.fechaLiquidacion);
                     const indiceCupon = cuponesFiltrados.findIndex(c => 
@@ -4529,20 +4944,21 @@ function cargarDatosLocalStorage() {
                         <td class="autocomplete-column">
                             <input type="text" class="input-table date-input fecha-final-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
                         </td>
-                        <td class="cer-column autocomplete-column"><input type="number" class="input-table valor-cer-inicio" step="0.0001" readonly /></td>
-                        <td class="cer-column autocomplete-column"><input type="number" class="input-table valor-cer-final" step="0.0001" readonly /></td>
                         <td class="autocomplete-column"><input type="number" class="input-table day-count-factor" readonly /></td>
-                        <td><input type="number" class="input-table amortizacion" step="0.01" value="${cupon.amortizacion || ''}" onchange="recalcularCamposCupon(this)" /></td>
+                        <td><input type="number" class="input-table amortizacion" step="0.01" value="${cupon.amortizacion || ''}" onchange="recalcularCamposCupon(this); recalcularFlujos(this.closest('tr'));" /></td>
                         <td><input type="number" class="input-table valor-residual" step="0.01" value="${cupon.valorResidual || ''}" onchange="recalcularValorResidualSiguiente(this)" /></td>
-                        <td><input type="number" class="input-table amortizacion-ajustada" step="0.01" readonly value="${cupon.amortizacionAjustada || ''}" /></td>
                         <td><input type="text" class="input-table renta-nominal" readonly /></td>
-                        <td><input type="text" class="input-table renta-tna" value="${cupon.rentaTNA || ''}" onchange="calcularRentaNominal(this)" onblur="convertirNumeroDecimal(this)" /></td>
-                        <td><input type="text" class="input-table renta-ajustada" readonly value="${cupon.rentaAjustada || ''}" /></td>
+                        <td><input type="text" class="input-table renta-tna" value="${cupon.rentaTNA || ''}" onchange="calcularRentaNominal(this); recalcularFlujos(this.closest('tr'));" onblur="convertirNumeroDecimal(this)" /></td>
                         <td><input type="number" class="input-table factor-actualizacion" step="0.0001" readonly value="${cupon.factorActualizacion || ''}" /></td>
                         <td><input type="number" class="input-table pagos-actualizados" step="0.01" readonly value="${cupon.pagosActualizados || ''}" /></td>
                         <td><input type="number" class="input-table flujos" step="0.01" readonly value="${cupon.flujos || ''}" /></td>
                         <td><input type="number" class="input-table flujos-desc-fecha-compra" step="0.01" readonly value="${cupon.flujosDescFechaCompra || ''}" /></td>
-                        <td>
+                        <td style="display: flex; gap: 4px; align-items: center; justify-content: center;">
+                            <button onclick="abrirTasaConFiltros('${tipoTasa}', ${cuponCount})" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Ver ${tipoTasa.toUpperCase()}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#5f6368">
+                                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                                </svg>
+                            </button>
                             <button onclick="eliminarCupon(${cuponCount})" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Eliminar cupón">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025">
                                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -4689,6 +5105,16 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 calcularFechasCER();
             }, 100);
+            // Recalcular rentas TNA si la fórmula es promedio aritmético
+            setTimeout(() => {
+                const formula = document.getElementById('formula')?.value || '';
+                if (formula === 'promedio-aritmetico' || formula === 'promedio-n-tasas') {
+                    calcularPromedioAritmetico();
+                } else {
+                    // Si no es promedio aritmético, verificar si hay cupones con fecha inicio > fecha valuación
+                    verificarYReplicarRentaTNA();
+                }
+            }, 200);
             // Recalcular factor actualización y pagos actualizados
             setTimeout(() => {
                 const cashflowRows = document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]');
@@ -4699,7 +5125,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Recalcular sumatoria de pagos actualizados y todos los precios
                 calcularSumatoriaPagosActualizados();
                 recalcularTodosPrecios();
-            }, 150);
+            }, 250);
         });
     }
     

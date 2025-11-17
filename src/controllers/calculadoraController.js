@@ -130,10 +130,44 @@ const renderCER = async (req, res) => {
 
 // Renderizar página de TAMAR
 const renderTAMAR = async (req, res) => {
+    const pool = require('../config/database');
+    
     try {
+        let datos = [];
+        let total = 0;
+        let pagina = 1;
+        const porPagina = 30;
+
+        // Si hay pool configurado, cargar datos paginados
+        if (pool) {
+            try {
+                pagina = parseInt(req.query.pagina) || 1;
+                const offset = (pagina - 1) * porPagina;
+
+                // Obtener total de registros (usando id_variable = 44 para TAMAR)
+                const countResult = await pool.query('SELECT COUNT(*) as total FROM cer WHERE id_variable = 44');
+                total = parseInt(countResult.rows[0].total);
+
+                // Obtener datos paginados (orden descendente - más reciente primero)
+                const result = await pool.query(
+                    'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE id_variable = 44 ORDER BY fecha DESC LIMIT $1 OFFSET $2',
+                    [porPagina, offset]
+                );
+                datos = result.rows;
+            } catch (error) {
+                console.error('Error al cargar datos de TAMAR:', error);
+                // Continuar sin datos si hay error
+            }
+        }
+
         res.render('pages/tamar', {
             title: 'Tira TAMAR',
-            activeMenu: 'tamar'
+            activeMenu: 'tamar',
+            datos: datos,
+            pagina: pagina,
+            total: total,
+            porPagina: porPagina,
+            totalPaginas: Math.ceil(total / porPagina)
         });
     } catch (error) {
         console.error('Error al renderizar TAMAR:', error);
@@ -147,10 +181,44 @@ const renderTAMAR = async (req, res) => {
 
 // Renderizar página de BADLAR
 const renderBADLAR = async (req, res) => {
+    const pool = require('../config/database');
+    
     try {
+        let datos = [];
+        let total = 0;
+        let pagina = 1;
+        const porPagina = 30;
+
+        // Si hay pool configurado, cargar datos paginados
+        if (pool) {
+            try {
+                pagina = parseInt(req.query.pagina) || 1;
+                const offset = (pagina - 1) * porPagina;
+
+                // Obtener total de registros (usando id_variable = 7 para BADLAR)
+                const countResult = await pool.query('SELECT COUNT(*) as total FROM cer WHERE id_variable = 7');
+                total = parseInt(countResult.rows[0].total);
+
+                // Obtener datos paginados (orden descendente - más reciente primero)
+                const result = await pool.query(
+                    'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE id_variable = 7 ORDER BY fecha DESC LIMIT $1 OFFSET $2',
+                    [porPagina, offset]
+                );
+                datos = result.rows;
+            } catch (error) {
+                console.error('Error al cargar datos de BADLAR:', error);
+                // Continuar sin datos si hay error
+            }
+        }
+
         res.render('pages/badlar', {
             title: 'Tira BADLAR',
-            activeMenu: 'badlar'
+            activeMenu: 'badlar',
+            datos: datos,
+            pagina: pagina,
+            total: total,
+            porPagina: porPagina,
+            totalPaginas: Math.ceil(total / porPagina)
         });
     } catch (error) {
         console.error('Error al renderizar BADLAR:', error);
@@ -307,15 +375,17 @@ const guardarCalculadora = async (req, res) => {
 
             // Guardar ESPECIE si hay datos
             if (datosEspecie && datosEspecie.ticker) {
+                // Determinar tipo de calculadora según la ruta o datos
+                const tipoCalculadora = datosEspecie.tipoCalculadora || 'cer';
+                
                 // Usar NOW() con conversión explícita a zona horaria de Argentina
-                // (NOW() AT TIME ZONE 'UTC') obtiene la hora UTC actual
-                // AT TIME ZONE 'America/Argentina/Buenos_Aires' la convierte a hora de Argentina
                 await pool.query(
                     `INSERT INTO especies (
                         titulo, ticker, fecha_emision, tipo_interes_dias, 
                         periodicidad, fecha_primera_renta, fecha_amortizacion, 
-                        intervalo_inicio, intervalo_fin, fecha_creacion, fecha_actualizacion
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 
+                        intervalo_inicio, intervalo_fin, formula, tasa, spread, renta_tna, tipo_calculadora,
+                        fecha_creacion, fecha_actualizacion
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                         (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone,
                         (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone)
                     ON CONFLICT (titulo) DO UPDATE SET
@@ -327,6 +397,11 @@ const guardarCalculadora = async (req, res) => {
                         fecha_amortizacion = EXCLUDED.fecha_amortizacion,
                         intervalo_inicio = EXCLUDED.intervalo_inicio,
                         intervalo_fin = EXCLUDED.intervalo_fin,
+                        formula = EXCLUDED.formula,
+                        tasa = EXCLUDED.tasa,
+                        spread = EXCLUDED.spread,
+                        renta_tna = EXCLUDED.renta_tna,
+                        tipo_calculadora = EXCLUDED.tipo_calculadora,
                         fecha_actualizacion = (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone`,
                     [
                         titulo,
@@ -337,18 +412,29 @@ const guardarCalculadora = async (req, res) => {
                         datosEspecie.fechaPrimeraRenta || null,
                         datosEspecie.fechaAmortizacion || null,
                         datosEspecie.intervaloInicio || 0,
-                        datosEspecie.intervaloFin || 0
+                        datosEspecie.intervaloFin || 0,
+                        datosEspecie.formula || null,
+                        datosEspecie.tasa || null,
+                        (datosEspecie.spread !== null && datosEspecie.spread !== undefined && !isNaN(datosEspecie.spread)) 
+                            ? parseFloat(parseFloat(datosEspecie.spread).toFixed(8)) 
+                            : null,
+                        datosEspecie.rentaTNA ? parseFloat(parseFloat(datosEspecie.rentaTNA).toFixed(12)) : 0,
+                        tipoCalculadora
                     ]
                 );
             }
 
             // Guardar PARTIDA si hay datos
             if (datosPartida && (datosPartida.fechaCompra || datosPartida.precioCompra || datosPartida.cantidadPartida)) {
+                // Determinar tipo de calculadora según la ruta o datos
+                const tipoCalculadora = datosEspecie?.tipoCalculadora || datosPartida.tipoCalculadora || 'cer';
+                
                 // Usar NOW() con conversión explícita a zona horaria de Argentina
                 await pool.query(
                     `INSERT INTO partidas (
-                        titulo, ticker, fecha_compra, precio_compra, cantidad_partida, fecha_creacion, fecha_actualizacion
-                    ) VALUES ($1, $2, $3, $4, $5, 
+                        titulo, ticker, fecha_compra, precio_compra, cantidad_partida, tipo_calculadora,
+                        fecha_creacion, fecha_actualizacion
+                    ) VALUES ($1, $2, $3, $4, $5, $6,
                         (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone,
                         (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone)
                     ON CONFLICT (titulo) DO UPDATE SET
@@ -356,6 +442,7 @@ const guardarCalculadora = async (req, res) => {
                         fecha_compra = EXCLUDED.fecha_compra,
                         precio_compra = EXCLUDED.precio_compra,
                         cantidad_partida = EXCLUDED.cantidad_partida,
+                        tipo_calculadora = EXCLUDED.tipo_calculadora,
                         fecha_actualizacion = (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp without time zone`,
                     [
                         titulo,
@@ -363,7 +450,8 @@ const guardarCalculadora = async (req, res) => {
                         datosPartida.fechaCompra || null,
                         // Truncar a 8 decimales antes de guardar
                         datosPartida.precioCompra ? parseFloat(parseFloat(datosPartida.precioCompra).toFixed(8)) : 0,
-                        datosPartida.cantidadPartida || 0
+                        datosPartida.cantidadPartida || 0,
+                        tipoCalculadora
                     ]
                 );
             }
@@ -648,9 +736,8 @@ const guardarCER = async (req, res) => {
             const query = `
                 INSERT INTO cer (fecha, valor, id_variable)
                 VALUES ${placeholders.join(', ')}
-                ON CONFLICT (fecha) DO UPDATE SET
-                    valor = EXCLUDED.valor,
-                    id_variable = EXCLUDED.id_variable
+                ON CONFLICT (fecha, id_variable) DO UPDATE SET
+                    valor = EXCLUDED.valor
             `;
             
             try {
@@ -932,7 +1019,7 @@ const guardarFeriados = async (req, res) => {
     }
 };
 
-// Listar calculadoras guardadas
+// Listar calculadoras guardadas (filtradas por tipo)
 const listarCalculadoras = async (req, res) => {
     const pool = require('../config/database');
     
@@ -944,13 +1031,18 @@ const listarCalculadoras = async (req, res) => {
             });
         }
 
-        // Obtener todas las calculadoras (especies y partidas)
+        // Obtener tipo de calculadora desde query (cer o variable)
+        const tipoCalculadora = req.query.tipo || 'cer';
+
+        // Obtener calculadoras filtradas por tipo (especies y partidas)
         const especies = await pool.query(
-            'SELECT titulo, ticker, fecha_creacion, fecha_actualizacion FROM especies ORDER BY fecha_actualizacion DESC'
+            'SELECT titulo, ticker, fecha_creacion, fecha_actualizacion, tipo_calculadora FROM especies WHERE tipo_calculadora = $1 ORDER BY fecha_actualizacion DESC',
+            [tipoCalculadora]
         );
         
         const partidas = await pool.query(
-            'SELECT titulo, ticker, fecha_creacion, fecha_actualizacion FROM partidas ORDER BY fecha_actualizacion DESC'
+            'SELECT titulo, ticker, fecha_creacion, fecha_actualizacion, tipo_calculadora FROM partidas WHERE tipo_calculadora = $1 ORDER BY fecha_actualizacion DESC',
+            [tipoCalculadora]
         );
 
         // Combinar y ordenar por fecha de actualización
@@ -1094,6 +1186,476 @@ const eliminarCalculadora = async (req, res) => {
     }
 };
 
+// Funciones para TAMAR (id_variable = 44)
+// Verificar si existen datos de TAMAR en BD
+const verificarTAMAR = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.json({
+                success: true,
+                existen: false,
+                cantidad: 0
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (!desde || !hasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parámetros "desde" y "hasta" son requeridos'
+            });
+        }
+
+        const result = await pool.query(
+            'SELECT COUNT(*) as cantidad FROM cer WHERE fecha >= $1 AND fecha <= $2 AND id_variable = 44',
+            [desde, hasta]
+        );
+
+        const cantidad = parseInt(result.rows[0].cantidad);
+
+        res.json({
+            success: true,
+            existen: cantidad > 0,
+            cantidad: cantidad
+        });
+
+    } catch (error) {
+        console.error('Error al verificar TAMAR:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.json({
+                success: true,
+                existen: false,
+                cantidad: 0
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al verificar datos de TAMAR'
+        });
+    }
+};
+
+// Obtener datos de TAMAR desde BD
+const obtenerTAMARBD = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada'
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (desde && hasta) {
+            const result = await pool.query(
+                'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE fecha >= $1 AND fecha <= $2 AND id_variable = 44 ORDER BY fecha DESC',
+                [desde, hasta]
+            );
+
+            return res.json({
+                success: true,
+                datos: result.rows
+            });
+        }
+
+        const pagina = parseInt(req.query.pagina) || 1;
+        const porPagina = parseInt(req.query.porPagina) || 30;
+        const offset = (pagina - 1) * porPagina;
+
+        const countResult = await pool.query('SELECT COUNT(*) as total FROM cer WHERE id_variable = 44');
+        const total = parseInt(countResult.rows[0].total);
+
+        const result = await pool.query(
+            'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE id_variable = 44 ORDER BY fecha DESC LIMIT $1 OFFSET $2',
+            [porPagina, offset]
+        );
+
+        res.json({
+            success: true,
+            datos: result.rows,
+            pagina: pagina,
+            porPagina: porPagina,
+            total: total,
+            totalPaginas: Math.ceil(total / porPagina)
+        });
+
+    } catch (error) {
+        console.error('Error al obtener TAMAR de BD:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Error de conexión a la base de datos'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener datos de TAMAR'
+        });
+    }
+};
+
+// Obtener fechas existentes de TAMAR
+const obtenerFechasExistentesTAMAR = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.json({
+                success: true,
+                fechas: []
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (!desde || !hasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parámetros "desde" y "hasta" son requeridos'
+            });
+        }
+
+        const result = await pool.query(
+            'SELECT fecha FROM cer WHERE fecha >= $1 AND fecha <= $2 AND id_variable = 44',
+            [desde, hasta]
+        );
+
+        const fechas = result.rows.map(row => row.fecha);
+
+        res.json({
+            success: true,
+            fechas: fechas
+        });
+
+    } catch (error) {
+        console.error('Error al obtener fechas existentes de TAMAR:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.json({
+                success: true,
+                fechas: []
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener fechas existentes'
+        });
+    }
+};
+
+// Guardar datos de TAMAR
+const guardarTAMAR = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada'
+            });
+        }
+
+        const { datos } = req.body;
+
+        if (!datos || !Array.isArray(datos) || datos.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No hay datos de TAMAR para guardar'
+            });
+        }
+
+        const batchSize = 500;
+        let totalActualizados = 0;
+        
+        for (let i = 0; i < datos.length; i += batchSize) {
+            const batch = datos.slice(i, i + batchSize);
+            
+            const placeholders = [];
+            const params = [];
+            
+            batch.forEach((item, index) => {
+                const baseIndex = index * 3;
+                placeholders.push(`($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`);
+                params.push(item.fecha, item.valor, 44); // id_variable = 44 para TAMAR
+            });
+            
+            const query = `
+                INSERT INTO cer (fecha, valor, id_variable)
+                VALUES ${placeholders.join(', ')}
+                ON CONFLICT (fecha, id_variable) DO UPDATE SET
+                    valor = EXCLUDED.valor
+            `;
+            
+            try {
+                await pool.query(query, params);
+                totalActualizados += batch.length;
+            } catch (error) {
+                console.error('Error al insertar/actualizar lote TAMAR:', error);
+                throw error;
+            }
+        }
+
+        res.json({
+            success: true,
+            actualizados: totalActualizados,
+            message: `Se guardaron/actualizaron ${totalActualizados} registros de TAMAR`
+        });
+
+    } catch (error) {
+        console.error('Error al guardar TAMAR:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Error de conexión a la base de datos'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al guardar datos de TAMAR'
+        });
+    }
+};
+
+// Funciones para BADLAR (id_variable = 7)
+// Verificar si existen datos de BADLAR en BD
+const verificarBADLAR = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.json({
+                success: true,
+                existen: false,
+                cantidad: 0
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (!desde || !hasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parámetros "desde" y "hasta" son requeridos'
+            });
+        }
+
+        const result = await pool.query(
+            'SELECT COUNT(*) as cantidad FROM cer WHERE fecha >= $1 AND fecha <= $2 AND id_variable = 7',
+            [desde, hasta]
+        );
+
+        const cantidad = parseInt(result.rows[0].cantidad);
+
+        res.json({
+            success: true,
+            existen: cantidad > 0,
+            cantidad: cantidad
+        });
+
+    } catch (error) {
+        console.error('Error al verificar BADLAR:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.json({
+                success: true,
+                existen: false,
+                cantidad: 0
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al verificar datos de BADLAR'
+        });
+    }
+};
+
+// Obtener datos de BADLAR desde BD
+const obtenerBADLARBD = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada'
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (desde && hasta) {
+            const result = await pool.query(
+                'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE fecha >= $1 AND fecha <= $2 AND id_variable = 7 ORDER BY fecha DESC',
+                [desde, hasta]
+            );
+
+            return res.json({
+                success: true,
+                datos: result.rows
+            });
+        }
+
+        const pagina = parseInt(req.query.pagina) || 1;
+        const porPagina = parseInt(req.query.porPagina) || 30;
+        const offset = (pagina - 1) * porPagina;
+
+        const countResult = await pool.query('SELECT COUNT(*) as total FROM cer WHERE id_variable = 7');
+        const total = parseInt(countResult.rows[0].total);
+
+        const result = await pool.query(
+            'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE id_variable = 7 ORDER BY fecha DESC LIMIT $1 OFFSET $2',
+            [porPagina, offset]
+        );
+
+        res.json({
+            success: true,
+            datos: result.rows,
+            pagina: pagina,
+            porPagina: porPagina,
+            total: total,
+            totalPaginas: Math.ceil(total / porPagina)
+        });
+
+    } catch (error) {
+        console.error('Error al obtener BADLAR de BD:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Error de conexión a la base de datos'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener datos de BADLAR'
+        });
+    }
+};
+
+// Obtener fechas existentes de BADLAR
+const obtenerFechasExistentesBADLAR = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.json({
+                success: true,
+                fechas: []
+            });
+        }
+
+        const { desde, hasta } = req.query;
+
+        if (!desde || !hasta) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parámetros "desde" y "hasta" son requeridos'
+            });
+        }
+
+        const result = await pool.query(
+            'SELECT fecha FROM cer WHERE fecha >= $1 AND fecha <= $2 AND id_variable = 7',
+            [desde, hasta]
+        );
+
+        const fechas = result.rows.map(row => row.fecha);
+
+        res.json({
+            success: true,
+            fechas: fechas
+        });
+
+    } catch (error) {
+        console.error('Error al obtener fechas existentes de BADLAR:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.json({
+                success: true,
+                fechas: []
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener fechas existentes'
+        });
+    }
+};
+
+// Guardar datos de BADLAR
+const guardarBADLAR = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada'
+            });
+        }
+
+        const { datos } = req.body;
+
+        if (!datos || !Array.isArray(datos) || datos.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No hay datos de BADLAR para guardar'
+            });
+        }
+
+        const batchSize = 500;
+        let totalActualizados = 0;
+        
+        for (let i = 0; i < datos.length; i += batchSize) {
+            const batch = datos.slice(i, i + batchSize);
+            
+            const placeholders = [];
+            const params = [];
+            
+            batch.forEach((item, index) => {
+                const baseIndex = index * 3;
+                placeholders.push(`($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`);
+                params.push(item.fecha, item.valor, 7); // id_variable = 7 para BADLAR
+            });
+            
+            const query = `
+                INSERT INTO cer (fecha, valor, id_variable)
+                VALUES ${placeholders.join(', ')}
+                ON CONFLICT (fecha, id_variable) DO UPDATE SET
+                    valor = EXCLUDED.valor
+            `;
+            
+            try {
+                await pool.query(query, params);
+                totalActualizados += batch.length;
+            } catch (error) {
+                console.error('Error al insertar/actualizar lote BADLAR:', error);
+                throw error;
+            }
+        }
+
+        res.json({
+            success: true,
+            actualizados: totalActualizados,
+            message: `Se guardaron/actualizaron ${totalActualizados} registros de BADLAR`
+        });
+
+    } catch (error) {
+        console.error('Error al guardar BADLAR:', error);
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Error de conexión a la base de datos'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al guardar datos de BADLAR'
+        });
+    }
+};
+
 module.exports = {
     renderCalculadoraCER,
     renderCalculadoraVariable,
@@ -1113,6 +1675,16 @@ module.exports = {
     verificarFeriados,
     obtenerFeriadosBD,
     obtenerFechasExistentesFeriados,
-    guardarFeriados
+    guardarFeriados,
+    // Funciones para TAMAR
+    verificarTAMAR,
+    obtenerTAMARBD,
+    obtenerFechasExistentesTAMAR,
+    guardarTAMAR,
+    // Funciones para BADLAR
+    verificarBADLAR,
+    obtenerBADLARBD,
+    obtenerFechasExistentesBADLAR,
+    guardarBADLAR
 };
 

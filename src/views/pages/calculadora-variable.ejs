@@ -12,20 +12,379 @@
     <div class="app-container">
         <main class="main-content">
             <div class="content-area">
-                <h1 class="page-title">Calculadora Renta Variable</h1>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h1 class="page-title" style="margin: 0;">Calculadora Variable</h1>
+                    <div style="display: flex; gap: 12px;">
+                        <a href="#" class="chr-link chr-link--button-secondary" id="btnCargar">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                            </svg>
+                            <span>Cargar</span>
+                        </a>
+                        <a href="#" class="chr-link chr-link--button-secondary" onclick="event.preventDefault(); guardarCalculadora();" id="btnGuardar">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+                            </svg>
+                            <span>Guardar</span>
+                        </a>
+                    </div>
+                </div>
                 
+                <!-- Panel de Cashflow (Tabla de cupones) -->
+                <div class="card" style="margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="font-size: 20px; font-weight: 500; margin: 0; color: #e65100;">Cashflow - Cupones</h2>
+                        <a href="#" class="chr-link chr-link--button-secondary" onclick="event.preventDefault(); agregarCupon();" id="btnAgregarCupon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                            <span>Agregar Cupón</span>
+                        </a>
+                    </div>
+                    
+                    <!-- Fecha Valuación -->
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px; background: #f8f9fa; border-radius: 8px; flex-wrap: wrap;">
+                        <label for="fechaValuacion" style="font-size: 14px; font-weight: 500; color: var(--text-primary); min-width: 120px;">Fecha Valuación:</label>
+                        <div style="position: relative; display: inline-block;">
+                            <input type="text" class="input date-input" id="fechaValuacion" style="width: 150px; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                            <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaValuacion')" title="Seleccionar fecha">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                </svg>
+                            </button>
+                            <div id="datePickerFechaValuacion" class="date-picker-popup" style="display: none;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tabla de cashflow -->
+                    <div style="overflow-x: auto;">
+                        <table class="cashflow-table" id="cashflowTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30px; min-width: 30px;">Cupón</th>
+                                    <th title="Fecha de inicio del cupón">Fecha<br>Inicio</th>
+                                    <th title="Fecha de liquidación del cupón">Fecha<br>Liquid.</th>
+                                    <th class="autocomplete-column" title="Fecha inicio - 10 días hábiles">Inicio<br>Intervalo</th>
+                                    <th class="autocomplete-column" title="Fecha liquidación - intervalo fin días hábiles">Final<br>Intervalo</th>
+                                    <th class="autocomplete-column" title="Fracción año cupón (según base de días)">Day Count<br>Factor</th>
+                                    <th style="width: 50px; min-width: 50px;" title="Input partida">Amortiz.</th>
+                                    <th style="width: 50px; min-width: 50px;" title="Valor residual del cupón (inicia en 100, se reduce con amortizaciones)">Valor<br>Residual</th>
+                                    <th title="Renta TNA × Day Count Factor">Renta<br>Nominal</th>
+                                    <th style="width: 50px; min-width: 50px;" title="Input partida">Renta<br>TNA</th>
+                                    <th title="Factor de actualización">Factor<br>Actualiz.</th>
+                                    <th title="Pagos actualizados">Pagos<br>Actualiz.</th>
+                                    <th class="flujos-column" title="Inversión: -(Cantidad × Precio) | Cupones: Cantidad × (Renta nominal/100 + Amortización/100)">Flujos</th>
+                                    <th class="flujos-column" title="Flujo / (1 + TIR) ^ (Fracción año)">Flujos Desc.<br>F. Compra</th>
+                                    <th style="width: 40px; min-width: 40px;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cashflowBody">
+                                <!-- Fila de inversión inicial -->
+                                <tr class="inversion-row" data-tipo="inversion">
+                                    <td style="text-align: center; font-weight: 600; color: var(--text-secondary);">-</td>
+                                    <td>
+                                        <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
+                                    </td>
+                                    <td>
+                                        <input type="text" class="input-table date-input" id="fechaLiquidacion" placeholder="DD/MM/AAAA" maxlength="10" />
+                                    </td>
+                                    <td class="autocomplete-column">
+                                        <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
+                                    </td>
+                                    <td class="autocomplete-column">
+                                        <input type="text" class="input-table date-input" id="fechaFinalIntervaloInversion" readonly placeholder="DD/MM/AAAA" maxlength="10" />
+                                    </td>
+                                    <td class="autocomplete-column"><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td class="flujos-column"><input type="number" class="input-table" id="flujos" /></td>
+                                    <td class="flujos-column"><input type="number" class="input-table" id="flujosDescFechaCompra" /></td>
+                                    <td>
+                                        <span style="color: var(--text-secondary); font-size: 12px;">Inversión</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot id="cashflowFooter" style="display: none;">
+                                <tr style="background: #f8f9fa; font-weight: 600;">
+                                    <td colspan="15" style="text-align: right; padding: 12px 24px; border-top: 2px solid var(--border-color);">
+                                        <span style="color: var(--text-secondary); margin-right: 12px; font-size: 12px;">Sumatoria flujos Desc.:</span>
+                                        <span id="sumatoriaFlujosDesc" style="color: var(--text-primary); font-size: 12px;">0.00000000</span>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    
+                    <!-- Footer con botón calcular y resultado -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border-color);">
+                        <div style="display: flex; align-items: center; gap: 24px;">
+                            <button class="glue-button glue-button--high-emphasis" onclick="calcularTIR()" id="btnCalcularTIR" style="min-width: 150px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                                </svg>
+                                <span>Calcular TIR</span>
+                            </button>
+                            
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 16px; font-weight: 500; color: var(--text-secondary);">TIR:</span>
+                            <div id="resultadoTIR" style="font-size: 24px; font-weight: 600; color: var(--primary-color); min-width: 100px; text-align: right;">
+                                -
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Contenedor de paneles inferiores -->
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; margin-bottom: 24px;">
+                    <!-- Panel izquierdo: Datos de Partida y Especie -->
+                    <div>
+                        <!-- Datos de Partida -->
+                        <div class="card" style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: #e65100;">Datos Partida</h3>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Fecha Compra</label>
+                                <div style="position: relative; display: inline-block; width: 100%;">
+                                    <input type="text" class="input date-input" id="fechaCompra" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                    <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaCompra')" title="Seleccionar fecha">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                        </svg>
+                                    </button>
+                                    <div id="datePickerFechaCompra" class="date-picker-popup" style="display: none;"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Precio Compra</label>
+                                <input type="text" class="input" id="precioCompra" placeholder="Ej: 100.50 o 100,50" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Cantidad Partida</label>
+                                <input type="number" class="input" id="cantidadPartida" step="1" />
+                            </div>
+                        </div>
+                        
+                        <!-- Datos de Especie -->
+                        <div class="card" style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: #e65100;">Datos Especie</h3>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Ticker</label>
+                                <input type="text" class="input" id="ticker" placeholder="Ej: TX26" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Fecha Emisión</label>
+                                <div style="position: relative; display: inline-block; width: 100%;">
+                                    <input type="text" class="input date-input" id="fechaEmision" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                    <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaEmision')" title="Seleccionar fecha">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                        </svg>
+                                    </button>
+                                    <div id="datePickerFechaEmision" class="date-picker-popup" style="display: none;"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Base para contar días</label>
+                                <select class="input" id="tipoInteresDias">
+                                    <option value="0">US (NASD) 30/360</option>
+                                    <option value="1">Real/real (Actual/actual)</option>
+                                    <option value="2">Real/360 (Actual/360)</option>
+                                    <option value="3">Real/365 (Actual/365)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Periodicidad</label>
+                                <select class="input" id="periodicidad">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="mensual">Mensual</option>
+                                    <option value="bimestral">Bimestral</option>
+                                    <option value="trimestral">Trimestral</option>
+                                    <option value="semestral">Semestral</option>
+                                    <option value="anual">Anual</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Fórmula</label>
+                                <select class="input" id="formula" onchange="cambiarFormula()">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="promedio-aritmetico">Promedio Aritmético</option>
+                                    <option value="promedio-n-tasas">Promedio N tasas</option>
+                                    <option value="tasa-fija">Tasa fija</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Tasa</label>
+                                <select class="input" id="tasa" onchange="cambiarTasa()">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="badlar">BADLAR</option>
+                                    <option value="tamar">TAMAR</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Spread</label>
+                                <input type="text" class="input" id="spread" placeholder="Ej: 0.01" onchange="calcularRentaTNAConSpread()" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Renta TNA</label>
+                                <input type="text" class="input" id="rentaTNA" placeholder="Ej: 0.05" />
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Fecha Primera Renta</label>
+                                <div style="position: relative; display: inline-block; width: 100%;">
+                                    <input type="text" class="input date-input" id="fechaPrimeraRenta" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                    <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaPrimeraRenta')" title="Seleccionar fecha">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                        </svg>
+                                    </button>
+                                    <div id="datePickerFechaPrimeraRenta" class="date-picker-popup" style="display: none;"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Fecha Amortización</label>
+                                <div style="position: relative; display: inline-block; width: 100%;">
+                                    <input type="text" class="input date-input" id="fechaAmortizacion" style="width: 100%; padding-right: 40px;" placeholder="DD/MM/AAAA" maxlength="10" />
+                                    <button type="button" class="date-picker-icon" onclick="abrirDatePicker('fechaAmortizacion')" title="Seleccionar fecha">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                                        </svg>
+                                    </button>
+                                    <div id="datePickerFechaAmortizacion" class="date-picker-popup" style="display: none;"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Intervalo Inicio/Fin (días)</label>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Inicio</label>
+                                        <input type="number" class="input" id="intervaloInicio" step="1" placeholder="Ej: -10" />
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Fin</label>
+                                        <input type="number" class="input" id="intervaloFin" step="1" placeholder="Ej: -10" />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group" style="margin-top: 24px;">
+                                <a href="#" class="glue-button glue-button--high-emphasis" onclick="event.preventDefault(); autocompletarCupones();" style="width: 100%; display: flex; justify-content: center;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                                    </svg>
+                                    <span>Autocompletar Cupones</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Panel derecho: Resultados y Tira de Precios -->
+                    <div>
+                        <!-- Resultados -->
+                        <div class="card" style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: #1e8e3e;">Resultados</h3>
+                            
+                            <div style="display: flex; flex-wrap: nowrap; gap: 12px; overflow-x: auto;">
+                                <div class="resultado-item-horizontal">
+                                    <span class="resultado-label">Precio C+T</span>
+                                    <span class="resultado-valor" id="precioCT">-</span>
+                                </div>
+                                
+                                <div class="resultado-item-horizontal">
+                                    <span class="resultado-label">Precio C+T Ajustado</span>
+                                    <span class="resultado-valor" id="precioCTHoyAjustado">-</span>
+                                </div>
+                                
+                                <div class="resultado-item-horizontal">
+                                    <span class="resultado-label">Pagos Efect. Actualizados</span>
+                                    <span class="resultado-valor" id="pagosEfectActualizados">-</span>
+                                </div>
+                                
+                                <div class="resultado-item-horizontal" style="background: rgba(30, 142, 62, 0.15);">
+                                    <span class="resultado-label">Precio Ajustado - Pagos</span>
+                                    <span class="resultado-valor" id="precioCTAjustPagos">-</span>
+                                </div>
+                                
+                                <div class="resultado-item-horizontal" style="background: rgba(30, 142, 62, 0.15);">
+                                    <span class="resultado-label">Precio Técnico Venc.</span>
+                                    <span class="resultado-valor" id="precioTecnicoVencimiento">-</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tira de Precios -->
                 <div class="card">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🚧</div>
-                        <div class="empty-state-text">En desarrollo</div>
-                        <div class="empty-state-subtext">Esta funcionalidad estará disponible próximamente</div>
+                        <h3 style="font-size: 18px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">Tira de Precios</h3>
+                        
+                        <div style="overflow-x: auto;">
+                            <table class="tira-precios-table" id="tiraPreciosTable">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Precio C+T</th>
+                                        <th>Precio C+T Ajustado</th>
+                                        <th>Pagos Efect. Act. a Hoy</th>
+                                        <th>Precio C+T Ajust - Pagos Act.</th>
+                                        <th>Revaluo C+T</th>
+                                        <th>Revaluo de Ajuste (ADC)</th>
+                                        <th>Diferencia Rev Ajuste</th>
+                                        <th>Revaluo C+T + Dif Ajuste</th>
+                                        <th>Valuación</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tiraPreciosBody">
+                                    <tr>
+                                        <td colspan="10" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                                            Calcule la TIR para ver la tira de precios
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
 
+    <!-- Modal para cargar calculadoras guardadas -->
+    <div id="modalCargar" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;">
+        <div class="card" style="max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; position: relative;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color);">
+                <h2 style="font-size: 20px; font-weight: 500; margin: 0;">Cargar Calculadora</h2>
+                <button onclick="cerrarModalCargar()" style="background: none; border: none; cursor: pointer; padding: 8px; border-radius: 50%; transition: background 0.2s;" onmouseover="this.style.background='#f1f3f4'" onmouseout="this.style.background='transparent'">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="calculadorasLista" style="min-height: 200px;">
+                <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    Cargando calculadoras...
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="/js/main.js"></script>
+    <script src="/js/calculadora-variable.js"></script>
 </body>
 </html>
-
