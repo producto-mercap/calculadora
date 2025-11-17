@@ -1700,13 +1700,19 @@ function actualizarFlujosDescontadosYSumatoria() {
     
     console.log('✅ actualizarFlujosDescontadosYSumatoria - Sumatoria actualizada:', sumatoria.toFixed(8));
     
-    // Recalcular factor actualización y pagos actualizados para todos los cupones
-    const cashflowRowsCupones = document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]');
-    cashflowRowsCupones.forEach(row => {
-        recalcularFactorActualizacion(row);
-        recalcularPagosActualizados(row);
-    });
-}
+        // Recalcular factor actualización y pagos actualizados para todos los cupones
+        const cashflowRowsCupones = document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]');
+        cashflowRowsCupones.forEach(row => {
+            recalcularFactorActualizacion(row);
+            recalcularPagosActualizados(row);
+        });
+        
+        // Recalcular sumatoria de pagos actualizados y todos los precios después de calcular TIR
+        setTimeout(() => {
+            calcularSumatoriaPagosActualizados();
+            recalcularTodosPrecios();
+        }, 100);
+    }
 
 // Función para recalcular factor actualización
 function recalcularFactorActualizacion(row) {
@@ -1752,6 +1758,16 @@ function recalcularFactorActualizacion(row) {
         return;
     }
     
+    // Verificar que fecha liquidación < fecha valuación
+    const fechaLiquidacionDate = new Date(fechaLiquidacionStr);
+    const fechaValuacionDate = new Date(fechaValuacionStr);
+    
+    if (fechaLiquidacionDate >= fechaValuacionDate) {
+        // Si fecha liquidación >= fecha valuación, dejar en null
+        factorActualizacionInput.value = '';
+        return;
+    }
+    
     // Obtener tipoInteresDias (base) para calcular fracción de año
     const tipoInteresDias = parseInt(document.getElementById('tipoInteresDias')?.value) || 0;
     
@@ -1772,6 +1788,36 @@ function recalcularPagosActualizados(row) {
     const pagosActualizadosInput = row.querySelector('.pagos-actualizados');
     if (!pagosActualizadosInput) return;
     
+    // Verificar que fecha liquidación < fecha valuación
+    const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
+    const fechaValuacionInput = document.getElementById('fechaValuacion');
+    
+    if (!fechaLiquidacionInput || !fechaLiquidacionInput.value || !fechaValuacionInput || !fechaValuacionInput.value) {
+        pagosActualizadosInput.value = '';
+        return;
+    }
+    
+    // Convertir fechas a formato YYYY-MM-DD
+    let fechaLiquidacionStr = fechaLiquidacionInput.value;
+    let fechaValuacionStr = fechaValuacionInput.value;
+    
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaLiquidacionStr)) {
+        fechaLiquidacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaLiquidacionStr);
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaValuacionStr)) {
+        fechaValuacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaValuacionStr);
+    }
+    
+    // Verificar que fecha liquidación < fecha valuación
+    const fechaLiquidacionDate = new Date(fechaLiquidacionStr);
+    const fechaValuacionDate = new Date(fechaValuacionStr);
+    
+    if (fechaLiquidacionDate >= fechaValuacionDate) {
+        // Si fecha liquidación >= fecha valuación, dejar en null
+        pagosActualizadosInput.value = '';
+        return;
+    }
+    
     // Obtener factor actualización
     const factorActualizacionInput = row.querySelector('.factor-actualizacion');
     const factorActualizacion = parseFloat(factorActualizacionInput?.value) || 0;
@@ -1788,9 +1834,214 @@ function recalcularPagosActualizados(row) {
         const pagosActualizados = (factorActualizacion * flujoCupon) / cantidadPartida;
         const valorTruncado = window.truncarDecimal ? window.truncarDecimal(pagosActualizados, 12) : parseFloat(pagosActualizados.toFixed(12));
         pagosActualizadosInput.value = valorTruncado;
+        
+        // Actualizar sumatoria de pagos actualizados
+        calcularSumatoriaPagosActualizados();
     } else {
         pagosActualizadosInput.value = '';
+        // Actualizar sumatoria de pagos actualizados
+        calcularSumatoriaPagosActualizados();
     }
+}
+
+// Función para calcular sumatoria de pagos actualizados
+function calcularSumatoriaPagosActualizados() {
+    const rows = document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]');
+    let sumatoria = 0;
+    
+    rows.forEach(row => {
+        const pagosActualizadosInput = row.querySelector('.pagos-actualizados');
+        if (pagosActualizadosInput && pagosActualizadosInput.value) {
+            const valor = parseFloat(pagosActualizadosInput.value) || 0;
+            sumatoria += valor;
+        }
+    });
+    
+    const pagosEfectActualizadosDiv = document.getElementById('pagosEfectActualizados');
+    if (pagosEfectActualizadosDiv) {
+        const valorTruncado = window.truncarDecimal ? window.truncarDecimal(sumatoria, 12) : parseFloat(sumatoria.toFixed(12));
+        pagosEfectActualizadosDiv.textContent = valorTruncado.toFixed(8);
+    }
+}
+
+// Función para calcular Precio C+T
+function calcularPrecioCT() {
+    const precioCompraInput = document.getElementById('precioCompra');
+    const fechaCompraInput = document.getElementById('fechaCompra');
+    const fechaValuacionInput = document.getElementById('fechaValuacion');
+    const tipoInteresDiasInput = document.getElementById('tipoInteresDias');
+    
+    if (!precioCompraInput || !precioCompraInput.value || 
+        !fechaCompraInput || !fechaCompraInput.value ||
+        !fechaValuacionInput || !fechaValuacionInput.value ||
+        ultimaTIRCalculada === null) {
+        const precioCTDiv = document.getElementById('precioCT');
+        if (precioCTDiv) precioCTDiv.textContent = '-';
+        return;
+    }
+    
+    const precioCompra = parseFloat(convertirNumeroDecimal(precioCompraInput.value)) || 0;
+    
+    // Convertir fechas a formato YYYY-MM-DD
+    let fechaCompraStr = fechaCompraInput.value;
+    let fechaValuacionStr = fechaValuacionInput.value;
+    
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaCompraStr)) {
+        fechaCompraStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaCompraStr);
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaValuacionStr)) {
+        fechaValuacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaValuacionStr);
+    }
+    
+    if (!fechaCompraStr || !fechaValuacionStr) {
+        const precioCTDiv = document.getElementById('precioCT');
+        if (precioCTDiv) precioCTDiv.textContent = '-';
+        return;
+    }
+    
+    const tipoInteresDias = parseInt(tipoInteresDiasInput?.value) || 0;
+    
+    // Calcular fracción de año entre fecha compra y fecha valuación
+    const fraccionAnio = calcularFraccionAnio(fechaCompraStr, fechaValuacionStr, tipoInteresDias);
+    
+    // Precio C+T = precioCompra × (1 + TIR) ^ fracción año
+    const precioCT = precioCompra * Math.pow(1 + ultimaTIRCalculada, fraccionAnio);
+    const valorTruncado = window.truncarDecimal ? window.truncarDecimal(precioCT, 12) : parseFloat(precioCT.toFixed(12));
+    
+    const precioCTDiv = document.getElementById('precioCT');
+    if (precioCTDiv) {
+        precioCTDiv.textContent = valorTruncado.toFixed(8);
+    }
+}
+
+// Función para calcular Precio C+T Ajustado
+function calcularPrecioCTAjustado() {
+    const precioCTDiv = document.getElementById('precioCT');
+    const valorCERValuacionInput = document.getElementById('valorCERValuacion');
+    const valorCERFinalInput = document.getElementById('valorCERFinal');
+    
+    if (!precioCTDiv || precioCTDiv.textContent === '-' || !valorCERValuacionInput || !valorCERFinalInput) {
+        const precioCTHoyAjustadoDiv = document.getElementById('precioCTHoyAjustado');
+        if (precioCTHoyAjustadoDiv) precioCTHoyAjustadoDiv.textContent = '-';
+        return;
+    }
+    
+    const precioCT = parseFloat(precioCTDiv.textContent) || 0;
+    const valorCERValuacion = parseFloat(valorCERValuacionInput.value) || 0;
+    const valorCERFinal = parseFloat(valorCERFinalInput.value) || 0;
+    
+    if (valorCERFinal === 0) {
+        const precioCTHoyAjustadoDiv = document.getElementById('precioCTHoyAjustado');
+        if (precioCTHoyAjustadoDiv) precioCTHoyAjustadoDiv.textContent = '-';
+        return;
+    }
+    
+    // Precio C+T Ajustado = Precio C+T × valorCERValuacion / valorCERFinal
+    const precioCTAjustado = precioCT * (valorCERValuacion / valorCERFinal);
+    const valorTruncado = window.truncarDecimal ? window.truncarDecimal(precioCTAjustado, 12) : parseFloat(precioCTAjustado.toFixed(12));
+    
+    const precioCTHoyAjustadoDiv = document.getElementById('precioCTHoyAjustado');
+    if (precioCTHoyAjustadoDiv) {
+        precioCTHoyAjustadoDiv.textContent = valorTruncado.toFixed(8);
+    }
+}
+
+// Función para calcular Precio Ajustado - Pagos
+function calcularPrecioAjustadoPagos() {
+    const precioCTHoyAjustadoDiv = document.getElementById('precioCTHoyAjustado');
+    const pagosEfectActualizadosDiv = document.getElementById('pagosEfectActualizados');
+    
+    if (!precioCTHoyAjustadoDiv || precioCTHoyAjustadoDiv.textContent === '-' ||
+        !pagosEfectActualizadosDiv || pagosEfectActualizadosDiv.textContent === '-') {
+        const precioCTAjustPagosDiv = document.getElementById('precioCTAjustPagos');
+        if (precioCTAjustPagosDiv) precioCTAjustPagosDiv.textContent = '-';
+        return;
+    }
+    
+    const precioCTAjustado = parseFloat(precioCTHoyAjustadoDiv.textContent) || 0;
+    const pagosEfectActualizados = parseFloat(pagosEfectActualizadosDiv.textContent) || 0;
+    
+    // Precio Ajustado - Pagos = Precio C+T Ajustado - Pagos Efect. Actualizados
+    const precioAjustadoPagos = precioCTAjustado - pagosEfectActualizados;
+    const valorTruncado = window.truncarDecimal ? window.truncarDecimal(precioAjustadoPagos, 12) : parseFloat(precioAjustadoPagos.toFixed(12));
+    
+    const precioCTAjustPagosDiv = document.getElementById('precioCTAjustPagos');
+    if (precioCTAjustPagosDiv) {
+        precioCTAjustPagosDiv.textContent = valorTruncado.toFixed(8);
+    }
+}
+
+// Función para calcular Precio Técnico Vencimiento
+function calcularPrecioTecnicoVencimiento() {
+    const fechaValuacionInput = document.getElementById('fechaValuacion');
+    const precioTecnicoVencimientoDiv = document.getElementById('precioTecnicoVencimiento');
+    
+    if (!fechaValuacionInput || !fechaValuacionInput.value) {
+        if (precioTecnicoVencimientoDiv) precioTecnicoVencimientoDiv.textContent = '-';
+        return;
+    }
+    
+    // Obtener último cupón
+    const rows = Array.from(document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]'));
+    if (rows.length === 0) {
+        if (precioTecnicoVencimientoDiv) precioTecnicoVencimientoDiv.textContent = '-';
+        return;
+    }
+    
+    const ultimaRow = rows[rows.length - 1];
+    const fechaLiquidacionInput = ultimaRow.querySelector('.fecha-liquidacion');
+    
+    if (!fechaLiquidacionInput || !fechaLiquidacionInput.value) {
+        if (precioTecnicoVencimientoDiv) precioTecnicoVencimientoDiv.textContent = '-';
+        return;
+    }
+    
+    // Convertir fechas a formato YYYY-MM-DD
+    let fechaValuacionStr = fechaValuacionInput.value;
+    let fechaLiquidacionStr = fechaLiquidacionInput.value;
+    
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaValuacionStr)) {
+        fechaValuacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaValuacionStr);
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaLiquidacionStr)) {
+        fechaLiquidacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaLiquidacionStr);
+    }
+    
+    // Normalizar fechas para comparación (solo fecha, sin hora)
+    const fechaValuacionDate = new Date(fechaValuacionStr);
+    const fechaLiquidacionDate = new Date(fechaLiquidacionStr);
+    
+    fechaValuacionDate.setHours(0, 0, 0, 0);
+    fechaLiquidacionDate.setHours(0, 0, 0, 0);
+    
+    // Solo mostrar si fecha valuación = fecha liquidación último cupón
+    if (fechaValuacionDate.getTime() !== fechaLiquidacionDate.getTime()) {
+        if (precioTecnicoVencimientoDiv) precioTecnicoVencimientoDiv.textContent = '-';
+        return;
+    }
+    
+    // Calcular: amortización ajustada / 100 + renta ajustada / 100
+    const amortizacionAjustadaInput = ultimaRow.querySelector('.amortizacion-ajustada');
+    const rentaAjustadaInput = ultimaRow.querySelector('.renta-ajustada');
+    
+    const amortizacionAjustada = parseFloat(amortizacionAjustadaInput?.value) || 0;
+    const rentaAjustada = parseFloat(convertirNumeroDecimal(rentaAjustadaInput?.value)) || 0;
+    
+    const precioTecnicoVenc = (amortizacionAjustada / 100) + (rentaAjustada / 100);
+    const valorTruncado = window.truncarDecimal ? window.truncarDecimal(precioTecnicoVenc, 12) : parseFloat(precioTecnicoVenc.toFixed(12));
+    
+    if (precioTecnicoVencimientoDiv) {
+        precioTecnicoVencimientoDiv.textContent = valorTruncado.toFixed(8);
+    }
+}
+
+// Función para recalcular todos los precios
+function recalcularTodosPrecios() {
+    calcularPrecioCT();
+    calcularPrecioCTAjustado();
+    calcularSumatoriaPagosActualizados();
+    calcularPrecioAjustadoPagos();
+    calcularPrecioTecnicoVencimiento();
 }
 
 // Función para obtener valor CER de una fecha específica
@@ -3019,6 +3270,11 @@ async function calcularTIR() {
             recalcularFactorActualizacion(row);
             recalcularPagosActualizados(row);
         });
+        
+        // Recalcular todos los precios después de calcular TIR
+        setTimeout(() => {
+            recalcularTodosPrecios();
+        }, 100);
         
         // Calcular flujos descontados a fecha de compra usando la TIR encontrada
         console.log('📊 calcularTIR - Calculando flujos descontados a fecha de compra...');
@@ -4439,6 +4695,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     recalcularFactorActualizacion(row);
                     recalcularPagosActualizados(row);
                 });
+                // Recalcular sumatoria de pagos actualizados y todos los precios
+                calcularSumatoriaPagosActualizados();
+                recalcularTodosPrecios();
             }, 150);
         });
     }
@@ -4510,11 +4769,19 @@ document.addEventListener('DOMContentLoaded', () => {
         precioCompraInput.addEventListener('change', () => {
             console.log('🔄 precioCompra cambió, recalculando flujos');
             recalcularTodosFlujos();
+            // Recalcular precios
+            if (ultimaTIRCalculada !== null) {
+                recalcularTodosPrecios();
+            }
         });
         precioCompraInput.addEventListener('input', () => {
             // También recalcular mientras se escribe (con debounce)
             setTimeout(() => {
                 recalcularTodosFlujos();
+                // Recalcular precios
+                if (ultimaTIRCalculada !== null) {
+                    recalcularTodosPrecios();
+                }
             }, 300);
         });
     }
@@ -4641,6 +4908,32 @@ document.addEventListener('DOMContentLoaded', () => {
             if (fechaCompraInput.value && !fechaLiquidacionInput.value) {
                 fechaLiquidacionInput.value = fechaCompraInput.value;
                 aplicarMascaraFecha(fechaLiquidacionInput);
+            }
+            // Recalcular precios
+            if (ultimaTIRCalculada !== null) {
+                setTimeout(() => {
+                    recalcularTodosPrecios();
+                }, 100);
+            }
+        });
+    }
+    
+    // Listeners para recalcular precios cuando cambien valorCERValuacion o valorCERFinal
+    const valorCERValuacionInputForPrecios = document.getElementById('valorCERValuacion');
+    const valorCERFinalInputForPrecios = document.getElementById('valorCERFinal');
+    
+    if (valorCERValuacionInputForPrecios) {
+        valorCERValuacionInputForPrecios.addEventListener('change', () => {
+            if (ultimaTIRCalculada !== null) {
+                recalcularTodosPrecios();
+            }
+        });
+    }
+    
+    if (valorCERFinalInputForPrecios) {
+        valorCERFinalInputForPrecios.addEventListener('change', () => {
+            if (ultimaTIRCalculada !== null) {
+                recalcularTodosPrecios();
             }
         });
     }
@@ -4833,6 +5126,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     recalcularFactorActualizacion(row);
                     recalcularPagosActualizados(row);
                 });
+                // Recalcular sumatoria de pagos actualizados y todos los precios
+                calcularSumatoriaPagosActualizados();
+                recalcularTodosPrecios();
             }, 150);
         });
         fechaValuacionInputForListener.addEventListener('blur', () => {
@@ -4849,6 +5145,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     recalcularFactorActualizacion(row);
                     recalcularPagosActualizados(row);
                 });
+                // Recalcular sumatoria de pagos actualizados y todos los precios
+                calcularSumatoriaPagosActualizados();
+                recalcularTodosPrecios();
             }, 150);
         });
     }
