@@ -57,31 +57,42 @@
                     </div>
                     
                     <!-- Tabla de cashflow -->
-                    <div style="overflow-x: auto;">
-                        <table class="cashflow-table" id="cashflowTable">
+                    <div id="cashflowTableContainer" style="display: none;">
+                        <div style="overflow-x: auto;">
+                            <table class="cashflow-table" id="cashflowTable">
                             <thead>
                                 <tr>
-                                    <th style="width: 30px; min-width: 30px;">Cupón</th>
+                                    <th style="width: 30px; min-width: 30px;"></th>
                                     <th title="Fecha de inicio del cupón">Fecha<br>Inicio</th>
+                                    <th title="Fecha fin devengado (editable, se autocompleta con -1 día hábil desde fecha liquidación)">Fecha fin<br>Dev</th>
                                     <th title="Fecha de liquidación del cupón">Fecha<br>Liquid.</th>
                                     <th class="autocomplete-column" title="Fecha inicio - 10 días hábiles">Inicio<br>Intervalo</th>
-                                    <th class="autocomplete-column" title="Fecha liquidación - intervalo fin días hábiles">Final<br>Intervalo</th>
+                                    <th class="autocomplete-column" title="Fecha fin dev - intervalo fin días hábiles">Final<br>Intervalo</th>
                                     <th class="autocomplete-column" title="Fracción año cupón (según base de días)">Day Count<br>Factor</th>
-                                    <th style="width: 50px; min-width: 50px;" title="Input partida">Amortiz.</th>
-                                    <th style="width: 50px; min-width: 50px;" title="Valor residual del cupón (inicia en 100, se reduce con amortizaciones)">Valor<br>Residual</th>
-                                    <th title="Renta TNA × Day Count Factor">Renta<br>Nominal</th>
-                                    <th style="width: 50px; min-width: 50px;" title="Input partida">Renta<br>TNA</th>
+                                    <th title="Input partida" style="width: 60px; min-width: 60px; max-width: 60px;">Amortiz.</th>
+                                    <th title="Valor residual del cupón (inicia en 100, se reduce con amortizaciones)" style="width: 60px; min-width: 60px; max-width: 60px;">Valor<br>Residual</th>
+                                    <th title="Renta TNA × Day Count Factor (truncar a 12 decimales)">
+                                        Renta<br>Nominal<br>
+                                        <input type="number" id="decimalesRentaNominal" value="4" min="0" max="20" style="width: 35px; font-size: 9px; padding: 2px; border: 1px solid #dadce0; border-radius: 4px; text-align: center; margin-top: 4px;" onchange="actualizarDecimalesRentaNominal(this.value)" title="Decimales para truncar">
+                                    </th>
+                                    <th title="Input partida (redondear a 4 decimales)">
+                                        Renta<br>TNA<br>
+                                        <input type="number" id="decimalesRentaTNA" value="4" min="0" max="20" style="width: 35px; font-size: 9px; padding: 2px; border: 1px solid #dadce0; border-radius: 4px; text-align: center; margin-top: 4px;" onchange="actualizarDecimalesRentaTNA(this.value)" title="Decimales para redondear">
+                                    </th>
                                     <th title="Factor de actualización">Factor<br>Actualiz.</th>
                                     <th title="Pagos actualizados">Pagos<br>Actualiz.</th>
                                     <th class="flujos-column" title="Inversión: -(Cantidad × Precio) | Cupones: Cantidad × (Renta nominal/100 + Amortización/100)">Flujos</th>
                                     <th class="flujos-column" title="Flujo / (1 + TIR) ^ (Fracción año)">Flujos Desc.<br>F. Compra</th>
-                                    <th style="width: 40px; min-width: 40px;">Acciones</th>
+                                    <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="cashflowBody">
                                 <!-- Fila de inversión inicial -->
                                 <tr class="inversion-row" data-tipo="inversion">
                                     <td style="text-align: center; font-weight: 600; color: var(--text-secondary);">-</td>
+                                    <td>
+                                        <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
+                                    </td>
                                     <td>
                                         <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>
@@ -97,7 +108,7 @@
                                     <td class="autocomplete-column"><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
-                                    <td><input type="number" class="input-table" disabled /></td>
+                                    <td><input type="text" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
                                     <td><input type="number" class="input-table" disabled /></td>
@@ -110,13 +121,14 @@
                             </tbody>
                             <tfoot id="cashflowFooter" style="display: none;">
                                 <tr style="background: #f8f9fa; font-weight: 600;">
-                                    <td colspan="15" style="text-align: right; padding: 12px 24px; border-top: 2px solid var(--border-color);">
+                                    <td colspan="16" style="text-align: right; padding: 12px 24px; border-top: 2px solid var(--border-color);">
                                         <span style="color: var(--text-secondary); margin-right: 12px; font-size: 12px;">Sumatoria flujos Desc.:</span>
                                         <span id="sumatoriaFlujosDesc" style="color: var(--text-primary); font-size: 12px;">0.00000000</span>
                                     </td>
                                 </tr>
                             </tfoot>
                         </table>
+                        </div>
                     </div>
                     
                     <!-- Footer con botón calcular y resultado -->

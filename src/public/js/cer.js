@@ -338,9 +338,17 @@ function agregarFilaCER(item, tbody) {
 }
 
 // Generar tabla de CER (solo si está vacía) o agregar solo nuevos registros (OPTIMIZADO)
+// Variable global para almacenar datos filtrados de CER
+window.cerDatosFiltrados = [];
+
 function generarTablaCER(datos, soloNuevos = false) {
     const tbody = document.getElementById('cerTableBody');
     if (!tbody) return 0;
+    
+    // Almacenar datos filtrados globalmente
+    if (!soloNuevos) {
+        window.cerDatosFiltrados = datos;
+    }
     
     if (!soloNuevos) {
         // Si no es solo nuevos, limpiar y regenerar toda la tabla
@@ -616,15 +624,152 @@ async function filtrarCERPorIntervalo() {
             // Generar tabla con los resultados
             generarTablaCER(result.datos, false);
             console.log(`✅ filtrarCERPorIntervalo - Se encontraron ${result.datos.length} registros`);
+            // Mostrar botón de exportar CSV
+            mostrarBotonExportarCSV('cer');
         } else {
             tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px;">No se encontraron registros en el rango especificado</td></tr>';
             console.log('⚠️ filtrarCERPorIntervalo - No se encontraron registros');
+            // Ocultar botón de exportar CSV
+            ocultarBotonExportarCSV('cer');
         }
     } catch (error) {
         console.error('❌ filtrarCERPorIntervalo - Error:', error);
         tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px; color: red;">Error al buscar datos</td></tr>';
         showError('Error al buscar datos: ' + error.message);
     }
+}
+
+// Variable global para el tipo de variable actual (cer, badlar, tamar)
+window.tipoVariableActual = 'cer';
+
+// Función para mostrar botón de exportar CSV
+function mostrarBotonExportarCSV(tipo) {
+    window.tipoVariableActual = tipo;
+    const container = document.getElementById(`btnExportarCSV${tipo.toUpperCase()}Container`);
+    if (container) {
+        container.style.display = 'block';
+    }
+}
+
+// Función para ocultar botón de exportar CSV
+function ocultarBotonExportarCSV(tipo) {
+    const container = document.getElementById(`btnExportarCSV${tipo.toUpperCase()}Container`);
+    if (container) {
+        container.style.display = 'none';
+    }
+}
+
+// Función para abrir modal de exportar CSV
+function abrirModalExportarCSV(tipo) {
+    window.tipoVariableActual = tipo;
+    const modal = document.getElementById('modalExportarCSV');
+    const input = document.getElementById('formatoExportarCSV');
+    if (modal && input) {
+        // Autocompletar con FECHA;VALOR si está vacío
+        if (!input.value || input.value.trim() === '') {
+            input.value = 'FECHA;VALOR';
+        }
+        modal.style.display = 'flex';
+        input.focus();
+        // Seleccionar todo el texto para facilitar edición
+        input.select();
+    }
+}
+
+// Función para cerrar modal de exportar CSV
+function cerrarModalExportarCSV() {
+    const modal = document.getElementById('modalExportarCSV');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Función para formatear fecha a DD/MM/AAAA
+function formatearFechaExportar(fecha) {
+    if (!fecha) return '';
+    let fechaStr = fecha;
+    if (typeof fecha === 'string' && fecha.includes('T')) {
+        fechaStr = fecha.split('T')[0];
+    }
+    if (typeof fechaStr === 'string' && /^\d{4}-\d{2}-\d{2}/.test(fechaStr)) {
+        const partes = fechaStr.split('-');
+        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    return fechaStr;
+}
+
+// Función para formatear valor con coma como separador decimal
+function formatearValorExportar(valor) {
+    if (valor === null || valor === undefined) return '';
+    const valorNum = typeof valor === 'number' ? valor : parseFloat(valor);
+    if (isNaN(valorNum)) return '';
+    // Convertir a string y reemplazar punto por coma
+    // Mantener todos los decimales que tenga el número
+    return valorNum.toString().replace('.', ',');
+}
+
+// Función para exportar CSV
+function exportarCSV() {
+    const tipo = window.tipoVariableActual || 'cer';
+    const formatoInput = document.getElementById('formatoExportarCSV');
+    if (!formatoInput || !formatoInput.value.trim()) {
+        showError('Por favor ingrese un formato de exportación');
+        return;
+    }
+    
+    const formato = formatoInput.value.trim();
+    let datos = [];
+    
+    // Obtener datos según el tipo
+    if (tipo === 'cer') {
+        datos = window.cerDatosFiltrados || [];
+    } else if (tipo === 'badlar') {
+        datos = window.badlarDatosFiltrados || [];
+    } else if (tipo === 'tamar') {
+        datos = window.tamarDatosFiltrados || [];
+    }
+    
+    if (datos.length === 0) {
+        showError('No hay datos para exportar');
+        return;
+    }
+    
+    // Generar contenido CSV
+    const lineas = [];
+    datos.forEach(item => {
+        let fecha = item.fecha;
+        let valor = item.valor;
+        
+        // Formatear fecha
+        const fechaFormateada = formatearFechaExportar(fecha);
+        // Formatear valor
+        const valorFormateado = formatearValorExportar(valor);
+        
+        // Reemplazar FECHA y VALOR en el formato
+        let linea = formato;
+        linea = linea.replace(/FECHA/g, fechaFormateada);
+        linea = linea.replace(/VALOR/g, valorFormateado);
+        
+        lineas.push(linea);
+    });
+    
+    // Crear contenido CSV
+    const contenidoCSV = lineas.join('\n');
+    
+    // Crear blob y descargar
+    const blob = new Blob([contenidoCSV], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${tipo}_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Cerrar modal
+    cerrarModalExportarCSV();
+    showSuccess(`CSV exportado exitosamente (${datos.length} registros)`);
 }
 
 // Inicializar inputs de fecha con formato DD/MM/AAAA

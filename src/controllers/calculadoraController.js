@@ -93,13 +93,14 @@ const renderCER = async (req, res) => {
                 pagina = parseInt(req.query.pagina) || 1;
                 const offset = (pagina - 1) * porPagina;
 
-                // Obtener total de registros
-                const countResult = await pool.query('SELECT COUNT(*) as total FROM cer');
+                // Obtener total de registros (solo CER, id_variable = 30)
+                const countResult = await pool.query('SELECT COUNT(*) as total FROM cer WHERE id_variable = 30');
                 total = parseInt(countResult.rows[0].total);
 
                 // Obtener datos paginados (orden descendente - más reciente primero)
+                // Filtrar solo CER (id_variable = 30)
                 const result = await pool.query(
-                    'SELECT fecha, valor, id_variable as idVariable FROM cer ORDER BY fecha DESC LIMIT $1 OFFSET $2',
+                    'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE id_variable = 30 ORDER BY fecha DESC LIMIT $1 OFFSET $2',
                     [porPagina, offset]
                 );
                 datos = result.rows;
@@ -547,7 +548,7 @@ const verificarCER = async (req, res) => {
         }
 
         const result = await pool.query(
-            'SELECT COUNT(*) as cantidad FROM cer WHERE fecha >= $1 AND fecha <= $2',
+            'SELECT COUNT(*) as cantidad FROM cer WHERE fecha >= $1 AND fecha <= $2 AND id_variable = 30',
             [desde, hasta]
         );
 
@@ -592,9 +593,10 @@ const obtenerCERBD = async (req, res) => {
         const { desde, hasta } = req.query;
 
         // Si se proporcionan desde y hasta, obtener por rango de fechas
+        // Filtrar solo CER (id_variable = 30)
         if (desde && hasta) {
             const result = await pool.query(
-                'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha DESC',
+                'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE fecha >= $1 AND fecha <= $2 AND id_variable = 30 ORDER BY fecha DESC',
                 [desde, hasta]
             );
 
@@ -609,13 +611,14 @@ const obtenerCERBD = async (req, res) => {
         const porPagina = parseInt(req.query.porPagina) || 30;
         const offset = (pagina - 1) * porPagina;
 
-        // Obtener total de registros
-        const countResult = await pool.query('SELECT COUNT(*) as total FROM cer');
+        // Obtener total de registros (solo CER, id_variable = 30)
+        const countResult = await pool.query('SELECT COUNT(*) as total FROM cer WHERE id_variable = 30');
         const total = parseInt(countResult.rows[0].total);
 
         // Obtener datos paginados (orden descendente - más reciente primero)
+        // Filtrar solo CER (id_variable = 30)
         const result = await pool.query(
-            'SELECT fecha, valor, id_variable as idVariable FROM cer ORDER BY fecha DESC LIMIT $1 OFFSET $2',
+            'SELECT fecha, valor, id_variable as idVariable FROM cer WHERE id_variable = 30 ORDER BY fecha DESC LIMIT $1 OFFSET $2',
             [porPagina, offset]
         );
 
@@ -667,7 +670,7 @@ const obtenerFechasExistentesCER = async (req, res) => {
         }
 
         const result = await pool.query(
-            'SELECT fecha FROM cer WHERE fecha >= $1 AND fecha <= $2',
+            'SELECT fecha FROM cer WHERE fecha >= $1 AND fecha <= $2 AND id_variable = 30',
             [desde, hasta]
         );
 
@@ -839,6 +842,18 @@ const obtenerFeriadosBD = async (req, res) => {
 
         const { desde, hasta } = req.query;
 
+        // Si NO se proporcionan desde y hasta, obtener TODOS los feriados
+        if (!desde || !hasta) {
+            const result = await pool.query(
+                'SELECT fecha, nombre, tipo FROM feriados ORDER BY fecha ASC'
+            );
+
+            return res.json({
+                success: true,
+                datos: result.rows
+            });
+        }
+
         // Si se proporcionan desde y hasta, obtener por rango de fechas
         if (desde && hasta) {
             const result = await pool.query(
@@ -852,7 +867,7 @@ const obtenerFeriadosBD = async (req, res) => {
             });
         }
 
-        // Si no, usar paginación
+        // Si no, usar paginación (fallback)
         const pagina = parseInt(req.query.pagina) || 1;
         const porPagina = parseInt(req.query.porPagina) || 30;
         const offset = (pagina - 1) * porPagina;
@@ -1015,6 +1030,69 @@ const guardarFeriados = async (req, res) => {
         res.status(500).json({
             success: false,
             error: error.message || 'Error al guardar datos de feriados'
+        });
+    }
+};
+
+// Guardar un feriado individual
+const guardarFeriadoIndividual = async (req, res) => {
+    const pool = require('../config/database');
+    
+    try {
+        // Verificar si hay conexión a BD
+        if (!pool) {
+            return res.status(503).json({
+                success: false,
+                error: 'Base de datos no configurada. Configure DATABASE_URL en las variables de entorno con la URL real de Neon.'
+            });
+        }
+
+        const { fecha, nombre, tipo } = req.body;
+
+        // Validar datos requeridos
+        if (!fecha) {
+            return res.status(400).json({
+                success: false,
+                error: 'La fecha es requerida'
+            });
+        }
+
+        if (!nombre || nombre.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                error: 'El nombre es requerido'
+            });
+        }
+
+        // Insertar o actualizar el feriado
+        const result = await pool.query(
+            `INSERT INTO feriados (fecha, nombre, tipo)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (fecha) DO UPDATE SET
+                 nombre = EXCLUDED.nombre,
+                 tipo = EXCLUDED.tipo
+             RETURNING fecha, nombre, tipo`,
+            [fecha, nombre.trim(), tipo || '']
+        );
+
+        res.json({
+            success: true,
+            feriado: result.rows[0],
+            message: 'Feriado guardado exitosamente'
+        });
+
+    } catch (error) {
+        console.error('Error al guardar feriado individual:', error);
+        // Si hay error de conexión, retornar error específico
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Error de conexión a la base de datos. Verifique la configuración de DATABASE_URL.'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al guardar el feriado'
         });
     }
 };
@@ -1676,6 +1754,7 @@ module.exports = {
     obtenerFeriadosBD,
     obtenerFechasExistentesFeriados,
     guardarFeriados,
+    guardarFeriadoIndividual,
     // Funciones para TAMAR
     verificarTAMAR,
     obtenerTAMARBD,

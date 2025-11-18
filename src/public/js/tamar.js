@@ -157,9 +157,17 @@ async function cargarTAMAR() {
 }
 
 // Generar tabla de TAMAR
+// Variable global para almacenar datos filtrados de TAMAR
+window.tamarDatosFiltrados = [];
+
 function generarTablaTAMAR(datos, soloNuevos = false) {
     const tbody = document.getElementById('tamarTableBody');
     if (!tbody) return 0;
+    
+    // Almacenar datos filtrados globalmente
+    if (!soloNuevos) {
+        window.tamarDatosFiltrados = datos;
+    }
     
     if (!soloNuevos) {
         tbody.innerHTML = '';
@@ -400,14 +408,145 @@ async function filtrarTAMARPorIntervalo() {
         
         if (result.success && result.datos && result.datos.length > 0) {
             generarTablaTAMAR(result.datos, false);
+            // Mostrar botón de exportar CSV
+            mostrarBotonExportarCSV('tamar');
         } else {
             tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px;">No se encontraron registros en el rango especificado</td></tr>';
+            // Ocultar botón de exportar CSV
+            ocultarBotonExportarCSV('tamar');
         }
     } catch (error) {
         console.error('Error al buscar TAMAR:', error);
         tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; padding: 20px; color: red;">Error al buscar datos</td></tr>';
         showError('Error al buscar datos: ' + error.message);
     }
+}
+
+// Funciones de exportación CSV (compartidas con cer.js y badlar.js)
+// Si no están definidas, definirlas aquí
+if (typeof mostrarBotonExportarCSV === 'undefined') {
+    window.mostrarBotonExportarCSV = function(tipo) {
+        window.tipoVariableActual = tipo;
+        const container = document.getElementById(`btnExportarCSV${tipo.toUpperCase()}Container`);
+        if (container) {
+            container.style.display = 'block';
+        }
+    };
+}
+
+if (typeof ocultarBotonExportarCSV === 'undefined') {
+    window.ocultarBotonExportarCSV = function(tipo) {
+        const container = document.getElementById(`btnExportarCSV${tipo.toUpperCase()}Container`);
+        if (container) {
+            container.style.display = 'none';
+        }
+    };
+}
+
+if (typeof abrirModalExportarCSV === 'undefined') {
+    window.abrirModalExportarCSV = function(tipo) {
+        window.tipoVariableActual = tipo;
+        const modal = document.getElementById('modalExportarCSV');
+        const input = document.getElementById('formatoExportarCSV');
+        if (modal && input) {
+            if (!input.value || input.value.trim() === '') {
+                input.value = 'FECHA;VALOR';
+            }
+            modal.style.display = 'flex';
+            input.focus();
+            input.select();
+        }
+    };
+}
+
+if (typeof cerrarModalExportarCSV === 'undefined') {
+    window.cerrarModalExportarCSV = function() {
+        const modal = document.getElementById('modalExportarCSV');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    };
+}
+
+if (typeof formatearFechaExportar === 'undefined') {
+    window.formatearFechaExportar = function(fecha) {
+        if (!fecha) return '';
+        let fechaStr = fecha;
+        if (typeof fecha === 'string' && fecha.includes('T')) {
+            fechaStr = fecha.split('T')[0];
+        }
+        if (typeof fechaStr === 'string' && /^\d{4}-\d{2}-\d{2}/.test(fechaStr)) {
+            const partes = fechaStr.split('-');
+            return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+        return fechaStr;
+    };
+}
+
+if (typeof formatearValorExportar === 'undefined') {
+    window.formatearValorExportar = function(valor) {
+        if (valor === null || valor === undefined) return '';
+        const valorNum = typeof valor === 'number' ? valor : parseFloat(valor);
+        if (isNaN(valorNum)) return '';
+        return valorNum.toString().replace('.', ',');
+    };
+}
+
+if (typeof exportarCSV === 'undefined') {
+    window.exportarCSV = function() {
+        const tipo = window.tipoVariableActual || 'tamar';
+        const formatoInput = document.getElementById('formatoExportarCSV');
+        if (!formatoInput || !formatoInput.value.trim()) {
+            showError('Por favor ingrese un formato de exportación');
+            return;
+        }
+        
+        const formato = formatoInput.value.trim();
+        let datos = [];
+        
+        if (tipo === 'cer') {
+            datos = window.cerDatosFiltrados || [];
+        } else if (tipo === 'badlar') {
+            datos = window.badlarDatosFiltrados || [];
+        } else if (tipo === 'tamar') {
+            datos = window.tamarDatosFiltrados || [];
+        }
+        
+        if (datos.length === 0) {
+            showError('No hay datos para exportar');
+            return;
+        }
+        
+        const lineas = [];
+        datos.forEach(item => {
+            let fecha = item.fecha;
+            let valor = item.valor;
+            
+            const fechaFormateada = window.formatearFechaExportar(fecha);
+            const valorFormateado = window.formatearValorExportar(valor);
+            
+            let linea = formato;
+            linea = linea.replace(/FECHA/g, fechaFormateada);
+            linea = linea.replace(/VALOR/g, valorFormateado);
+            
+            lineas.push(linea);
+        });
+        
+        const contenidoCSV = lineas.join('\n');
+        
+        const blob = new Blob([contenidoCSV], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${tipo}_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        window.cerrarModalExportarCSV();
+        showSuccess(`CSV exportado exitosamente (${datos.length} registros)`);
+    };
 }
 
 // Inicializar
@@ -470,14 +609,24 @@ document.addEventListener('DOMContentLoaded', () => {
         aplicarMascaraFecha(buscarHastaInput);
     }
     
-    // Si hay datos iniciales, mostrar tabla
-    if (window.tamarDatos && window.tamarDatos.length > 0) {
+    // Limpiar datos filtrados si no hay auto-filtrar
+    // Solo mostrar tabla cuando se hace una búsqueda explícita
+    if (!fechaDesde || !fechaHasta || autoFiltrar !== 'true') {
+        window.tamarDatosFiltrados = [];
         const tableContainer = document.getElementById('tamarTableContainer');
         if (tableContainer) {
-            tableContainer.style.display = 'block';
-            generarTablaTAMAR(window.tamarDatos);
+            tableContainer.style.display = 'none';
         }
+        ocultarBotonExportarCSV('tamar');
     }
+    
+    // Limpiar datos al salir de la página
+    window.addEventListener('beforeunload', () => {
+        window.tamarDatosFiltrados = [];
+        sessionStorage.removeItem('tamar_fechaDesde');
+        sessionStorage.removeItem('tamar_fechaHasta');
+        sessionStorage.removeItem('tamar_autoFiltrar');
+    });
 });
 
 // Cambiar página de TAMAR

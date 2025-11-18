@@ -91,6 +91,7 @@ router.get('/feriados/verificar', calculadoraController.verificarFeriados);
 router.get('/feriados/bd', calculadoraController.obtenerFeriadosBD);
 router.get('/feriados/fechas-existentes', calculadoraController.obtenerFechasExistentesFeriados);
 router.post('/feriados/guardar', calculadoraController.guardarFeriados);
+router.post('/feriados/nuevo', calculadoraController.guardarFeriadoIndividual);
 
 // Obtener feriados de un año específico
 router.get('/feriados/:anio', async (req, res) => {

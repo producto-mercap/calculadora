@@ -36,6 +36,12 @@ window.abrirModalCargar = async function() {
 
 // Agregar nuevo cupón a la tabla
 function agregarCupon() {
+    // Mostrar la tabla si está oculta
+    const tableContainer = document.getElementById('cashflowTableContainer');
+    if (tableContainer) {
+        tableContainer.style.display = 'block';
+    }
+    
     cuponCount++;
     const tbody = document.getElementById('cashflowBody');
     
@@ -57,7 +63,10 @@ function agregarCupon() {
             <input type="text" class="input-table date-input fecha-inicio" id="fechaInicio${cuponCount}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
         </td>
         <td>
-            <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
+            <input type="text" class="input-table date-input fecha-fin-dev" id="fechaFinDev${cuponCount}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularFechasCER()" />
+        </td>
+        <td>
+            <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this); autocompletarFechaFinDev(this)" />
         </td>
         <td class="autocomplete-column">
             <input type="text" class="input-table date-input fecha-inicio-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
@@ -249,7 +258,8 @@ function calcularRentaTNAConSpread() {
     // Si hay spread, sumarlo a la renta TNA
     if (spread !== 0 && rentaTNAActual !== 0) {
         const nuevaRentaTNA = rentaTNAActual + spread;
-        rentaTNAInput.value = nuevaRentaTNA.toFixed(8);
+        const decimales = window.decimalesRentaTNA || 8;
+        rentaTNAInput.value = nuevaRentaTNA.toFixed(decimales);
         
         // Recalcular renta nominal en todos los cupones
         const rows = document.querySelectorAll('#cashflowBody tr[data-tipo="cupon"]');
@@ -348,10 +358,21 @@ async function calcularPromedioAritmetico() {
         
         // Calcular promedio aritmético (igual que en tamar.js/badlar.js)
         // Filtrar valores null/undefined antes de calcular
-        const valoresValidos = valores.filter(item => {
+        let valoresValidos = valores.filter(item => {
             const valor = item.valor;
             return valor !== null && valor !== undefined && !isNaN(parseFloat(valor));
         });
+        
+        // Si no hay Tamar futuras (fechas mayores a fecha valuación), no las incluir en el promedio
+        if (fechaValuacionDate && tasa === 'tamar') {
+            const fechaValuacionStr = formatearFechaInput(fechaValuacionDate);
+            valoresValidos = valoresValidos.filter(item => {
+                const fechaItem = item.fecha.split('T')[0];
+                // Solo incluir fechas menores o iguales a fecha valuación
+                return fechaItem <= fechaValuacionStr;
+            });
+            console.log(`📊 calcularPromedioAritmetico - Filtradas Tamar futuras. Valores válidos después del filtro: ${valoresValidos.length}`);
+        }
         
         if (valoresValidos.length === 0) {
             console.warn('⚠️ No hay valores válidos para calcular el promedio');
@@ -371,7 +392,8 @@ async function calcularPromedioAritmetico() {
         const rentaTNA = promedio + spread;
         
         // Actualizar renta TNA del cupón
-        rentaTNAInputCupon.value = rentaTNA.toFixed(8);
+        const decimales = window.decimalesRentaTNA || 8;
+        rentaTNAInputCupon.value = rentaTNA.toFixed(decimales);
         
         // Recalcular renta nominal
         calcularRentaNominal(rentaTNAInputCupon);
@@ -652,7 +674,49 @@ function calcular30_360European(inicio, fin) {
 }
 
 // Calcular Day Count Factor para una fila específica
+// Autocompletar Fecha fin Dev cuando cambia Fecha Liquidación (-1 día hábil)
+function autocompletarFechaFinDev(input) {
+    const row = input.closest('tr');
+    if (!row) return;
+    
+    const fechaLiquidacionInput = input;
+    const fechaFinDevInput = row.querySelector('.fecha-fin-dev');
+    
+    if (!fechaLiquidacionInput || !fechaFinDevInput) return;
+    
+    const fechaLiquidacion = fechaLiquidacionInput.value;
+    if (!fechaLiquidacion) {
+        fechaFinDevInput.value = '';
+        return;
+    }
+    
+    // Convertir fecha liquidación a formato YYYY-MM-DD
+    let fechaLiquidacionStr = fechaLiquidacion;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaLiquidacion)) {
+        fechaLiquidacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaLiquidacion);
+    }
+    
+    const fechaLiquidacionDate = crearFechaDesdeString(fechaLiquidacionStr);
+    if (!fechaLiquidacionDate) return;
+    
+    // Calcular -1 día hábil desde fecha liquidación
+    // Usar todos los feriados del cache
+    const feriadosAUsar = cacheFeriados || [];
+    const fechaFinDev = calcularFechaConDiasHabiles(fechaLiquidacionDate, -1, feriadosAUsar);
+    
+    if (fechaFinDev) {
+        fechaFinDevInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(fechaFinDev));
+        console.log(`✅ autocompletarFechaFinDev - Fecha fin Dev autocompletada: ${formatearFechaInput(fechaFinDev)} (desde ${formatearFechaInput(fechaLiquidacionDate)} - 1 día hábil)`);
+    } else {
+        console.warn(`⚠️ autocompletarFechaFinDev - No se pudo calcular fecha fin dev`);
+    }
+}
+
 function calcularDayCountFactor(input) {
+    // Recalcular fechas CER cuando cambia una fecha de inicio o liquidación
+    setTimeout(() => {
+        calcularFechasCER();
+    }, 50);
     const row = input.closest('tr');
     if (!row) return;
     
@@ -753,22 +817,26 @@ function obtenerFeriadosCache(fechaDesde, fechaHasta) {
     }
     
     // Filtrar feriados dentro del rango
+    // Los feriados en cacheFeriados ya están normalizados como strings YYYY-MM-DD
     const feriadosFiltrados = cacheFeriados.filter(feriado => {
         let fechaFeriado;
         
-        // Si el feriado es un string, convertirlo a Date
+        // Los feriados en cacheFeriados son strings en formato YYYY-MM-DD
         if (typeof feriado === 'string') {
             fechaFeriado = crearFechaDesdeString(feriado);
         } else if (feriado instanceof Date) {
             fechaFeriado = feriado;
-        } else if (feriado.fecha) {
-            // Si es un objeto con propiedad fecha
-            fechaFeriado = crearFechaDesdeString(feriado.fecha);
+        } else if (feriado && typeof feriado === 'object' && feriado.fecha) {
+            // Si es un objeto con propiedad fecha (caso raro, pero por si acaso)
+            const fechaStr = typeof feriado.fecha === 'string' 
+                ? feriado.fecha 
+                : formatearFechaInput(feriado.fecha);
+            fechaFeriado = crearFechaDesdeString(fechaStr);
         } else {
             return false;
         }
         
-        if (!fechaFeriado) return false;
+        if (!fechaFeriado || isNaN(fechaFeriado.getTime())) return false;
         
         // Normalizar hora para comparación
         fechaFeriado.setHours(12, 0, 0, 0);
@@ -797,61 +865,79 @@ function obtenerCERCache(fechaDesde, fechaHasta) {
     return [];
 }
 
-// Cargar feriados y CER desde BD al iniciar (rango amplio)
+// Cargar feriados y CER desde BD al iniciar (cargar TODOS los feriados)
 async function cargarDatosDesdeBD() {
     try {
-        // Calcular rango amplio (últimos 10 años para asegurar que incluya fechas antiguas)
-        const hoy = new Date();
-        const hace10Anos = new Date();
-        hace10Anos.setFullYear(hoy.getFullYear() - 10);
+        console.log('📥 Cargando TODOS los feriados desde BD (sin límite de fecha)...');
         
-        // Validar fechas antes de formatear
-        if (isNaN(hace10Anos.getTime()) || isNaN(hoy.getTime())) {
-            console.error('❌ Fechas inválidas para cargar desde BD');
-            return;
-        }
-        
-        const fechaDesdeStr = formatearFechaInput(hace10Anos);
-        const fechaHastaStr = formatearFechaInput(hoy);
-        
-        // Validar que las fechas formateadas sean válidas
-        if (!fechaDesdeStr || !fechaHastaStr || !/^\d{4}-\d{2}-\d{2}$/.test(fechaDesdeStr) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaHastaStr)) {
-            console.error('❌ Fechas formateadas inválidas:', fechaDesdeStr, fechaHastaStr);
-            return;
-        }
-        
-        console.log('📥 Cargando feriados y CER desde BD...');
-        
-        // Cargar feriados desde BD
+        // Cargar feriados desde BD (SIN parámetros = todos los feriados)
         try {
-            const responseFeriados = await fetch(`/api/feriados/bd?desde=${encodeURIComponent(fechaDesdeStr)}&hasta=${encodeURIComponent(fechaHastaStr)}`);
+            const responseFeriados = await fetch('/api/feriados/bd');
             const resultFeriados = await responseFeriados.json();
             
             if (resultFeriados.success && resultFeriados.datos && resultFeriados.datos.length > 0) {
                 // Normalizar fechas de feriados a formato YYYY-MM-DD
+                console.log('📊 Datos recibidos de BD (primeros 3):', resultFeriados.datos.slice(0, 3));
+                let contadorLog = 0;
                 cacheFeriados = resultFeriados.datos.map(f => {
                     let fecha = f.fecha || f.date || f;
+                    const fechaOriginal = fecha;
+                    const tipoOriginal = typeof fecha;
+                    
                     // Si es un objeto Date, convertirlo a string YYYY-MM-DD
                     if (fecha instanceof Date) {
                         fecha = formatearFechaInput(fecha);
-                    } else if (typeof fecha === 'string' && fecha.includes('T')) {
-                        fecha = fecha.split('T')[0];
+                    } 
+                    // Si es un string, normalizarlo a YYYY-MM-DD
+                    else if (typeof fecha === 'string') {
+                        // Si tiene formato timestamp (incluye T)
+                        if (fecha.includes('T')) {
+                            fecha = fecha.split('T')[0];
+                        }
+                        // Si tiene formato DD-MM-YYYY o DD/MM/YYYY, convertir a YYYY-MM-DD
+                        else if (/^\d{2}[-\/]\d{2}[-\/]\d{4}$/.test(fecha)) {
+                            fecha = convertirFechaDDMMAAAAaYYYYMMDD(fecha.replace(/\//g, '-'));
+                        }
+                        // Si ya está en formato YYYY-MM-DD, dejarlo así
+                        // Si no coincide con ningún formato conocido, intentar parsearlo
+                        else if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+                            const fechaDate = crearFechaDesdeString(fecha);
+                            if (fechaDate) {
+                                fecha = formatearFechaInput(fechaDate);
+                            }
+                        }
                     }
+                    
+                    // Log para depuración (solo los primeros 3)
+                    if (contadorLog < 3 && fechaOriginal !== fecha) {
+                        console.log(`   🔄 Feriado normalizado: ${tipoOriginal} ${fechaOriginal} -> ${fecha}`);
+                    }
+                    contadorLog++;
+                    
                     return fecha;
                 });
-                cacheFeriadosRango = { desde: fechaDesdeStr, hasta: fechaHastaStr };
-                console.log(`✅ Feriados cargados desde BD: ${cacheFeriados.length} feriados en cache`);
-                console.log('📊 Primeros 3 feriados:', cacheFeriados.slice(0, 3));
+                // No establecer rango ya que se cargaron TODOS los feriados
+                cacheFeriadosRango = null;
+                console.log(`✅ Feriados cargados desde BD: ${cacheFeriados.length} feriados en cache (TODOS los feriados)`);
+                console.log('📊 Primeros 5 feriados:', cacheFeriados.slice(0, 5));
+                console.log('📊 Formato de feriados:', cacheFeriados.slice(0, 5).map(f => typeof f + ':' + f));
             } else {
-                console.log('ℹ️ No hay feriados en BD para el rango solicitado');
+                console.log('ℹ️ No hay feriados en BD');
             }
         } catch (error) {
             console.warn('⚠️ Error al cargar feriados desde BD:', error);
         }
         
-        // Cargar CER desde BD
+        // Cargar CER desde BD (usar rango amplio para CER)
         try {
-            const responseCER = await fetch(`/api/cer/bd?desde=${encodeURIComponent(fechaDesdeStr)}&hasta=${encodeURIComponent(fechaHastaStr)}`);
+            const hoy = new Date();
+            const hace10Anos = new Date();
+            hace10Anos.setFullYear(hoy.getFullYear() - 10);
+            const en5Anos = new Date();
+            en5Anos.setFullYear(hoy.getFullYear() + 5);
+            const fechaDesdeCER = formatearFechaInput(hace10Anos);
+            const fechaHastaCER = formatearFechaInput(en5Anos);
+            const responseCER = await fetch(`/api/cer/bd?desde=${encodeURIComponent(fechaDesdeCER)}&hasta=${encodeURIComponent(fechaHastaCER)}`);
             const resultCER = await responseCER.json();
             
             if (resultCER.success && resultCER.datos && resultCER.datos.length > 0) {
@@ -1035,9 +1121,40 @@ async function actualizarDatosAPIs() {
             const resultFeriados = await responseFeriados.json();
             
             if (resultFeriados.success && resultFeriados.datos) {
-                cacheFeriados = resultFeriados.datos.map(f => f.fecha || f.date || f);
+                // Normalizar fechas de feriados a formato YYYY-MM-DD
+                cacheFeriados = resultFeriados.datos.map(f => {
+                    let fecha = f.fecha || f.date || f;
+                    
+                    // Si es un objeto Date, convertirlo a string YYYY-MM-DD
+                    if (fecha instanceof Date) {
+                        fecha = formatearFechaInput(fecha);
+                    } 
+                    // Si es un string, normalizarlo a YYYY-MM-DD
+                    else if (typeof fecha === 'string') {
+                        // Si tiene formato timestamp (incluye T)
+                        if (fecha.includes('T')) {
+                            fecha = fecha.split('T')[0];
+                        }
+                        // Si tiene formato DD-MM-YYYY o DD/MM/YYYY, convertir a YYYY-MM-DD
+                        else if (/^\d{2}[-\/]\d{2}[-\/]\d{4}$/.test(fecha)) {
+                            fecha = convertirFechaDDMMAAAAaYYYYMMDD(fecha.replace(/\//g, '-'));
+                        }
+                        // Si ya está en formato YYYY-MM-DD, dejarlo así
+                        // Si no coincide con ningún formato conocido, intentar parsearlo
+                        else if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+                            const fechaDate = crearFechaDesdeString(fecha);
+                            if (fechaDate) {
+                                fecha = formatearFechaInput(fechaDate);
+                            }
+                        }
+                    }
+                    
+                    return fecha;
+                });
                 cacheFeriadosRango = { desde: fechaDesdeStr, hasta: fechaHastaStr };
                 console.log(`✅ Feriados actualizados: ${cacheFeriados.length} feriados cargados`);
+                console.log('📊 Primeros 5 feriados:', cacheFeriados.slice(0, 5));
+                console.log('📊 Formato de feriados:', cacheFeriados.slice(0, 5).map(f => typeof f + ':' + f));
             } else {
                 console.warn('⚠️ No se pudieron obtener feriados:', resultFeriados.error);
             }
@@ -1088,7 +1205,9 @@ function esFinDeSemana(fecha) {
 
 // Verificar si una fecha es feriado
 function esFeriado(fecha, feriados) {
-    if (!fecha || !feriados || feriados.length === 0) return false;
+    if (!fecha || !feriados || feriados.length === 0) {
+        return false;
+    }
     
     const fechaStr = formatearFechaInput(fecha);
     // Normalizar fecha para comparación (asegurar formato YYYY-MM-DD)
@@ -1096,14 +1215,39 @@ function esFeriado(fecha, feriados) {
     
     // Verificar si la fecha está en el array de feriados (comparar con formato normalizado)
     const esFeriado = feriados.some(feriado => {
-        let feriadoStr = feriado;
+        let feriadoStr = null;
+        
+        // Los feriados en cacheFeriados son strings en formato YYYY-MM-DD
         // Si el feriado es un objeto Date, convertirlo a string
         if (feriado instanceof Date) {
             feriadoStr = formatearFechaInput(feriado);
-        } else if (typeof feriado === 'string' && feriado.includes('T')) {
-            feriadoStr = feriado.split('T')[0];
+        } 
+        // Si el feriado es un objeto con propiedad fecha (caso raro)
+        else if (feriado && typeof feriado === 'object' && feriado.fecha) {
+            const fechaObj = feriado.fecha;
+            if (fechaObj instanceof Date) {
+                feriadoStr = formatearFechaInput(fechaObj);
+            } else if (typeof fechaObj === 'string') {
+                feriadoStr = fechaObj.includes('T') ? fechaObj.split('T')[0] : fechaObj;
+            }
         }
-        return feriadoStr === fechaNormalizada;
+        // Si el feriado es un string (caso más común - ya está normalizado como YYYY-MM-DD)
+        else if (typeof feriado === 'string') {
+            feriadoStr = feriado.includes('T') ? feriado.split('T')[0] : feriado;
+        }
+        
+        // Normalizar ambos strings para comparación (asegurar formato YYYY-MM-DD)
+        if (feriadoStr) {
+            // Si el formato es DD-MM-YYYY o DD/MM/YYYY, convertir a YYYY-MM-DD
+            if (/^\d{2}[-\/]\d{2}[-\/]\d{4}$/.test(feriadoStr)) {
+                feriadoStr = convertirFechaDDMMAAAAaYYYYMMDD(feriadoStr.replace(/\//g, '-'));
+            }
+            // Comparar fechas normalizadas (comparación exacta de strings)
+            const coincide = feriadoStr === fechaNormalizada;
+            return coincide;
+        }
+        
+        return false;
     });
     
     return esFeriado;
@@ -1156,8 +1300,12 @@ function calcularFechaConDiasHabiles(fechaBase, dias, feriados) {
     let diasRestantes = Math.abs(dias);
     const direccion = dias >= 0 ? 1 : -1; // 1 = avanzar, -1 = retroceder
     
-    console.log(`🔍 calcularFechaConDiasHabiles - Inicio: ${formatearFechaInput(fechaBase)}, días: ${dias}, dirección: ${direccion > 0 ? 'avanzar' : 'retroceder'}`);
-    console.log(`📊 Feriados disponibles: ${feriados ? feriados.length : 0} feriados`);
+    // Logs solo en modo debug (comentados para reducir ruido)
+    // console.log(`🔍 calcularFechaConDiasHabiles - Inicio: ${formatearFechaInput(fechaBase)}, días: ${dias}, dirección: ${direccion > 0 ? 'avanzar' : 'retroceder'}`);
+    // console.log(`📊 Feriados disponibles: ${feriados ? feriados.length : 0} feriados`);
+    // if (feriados && feriados.length > 0) {
+    //     console.log(`📊 Primeros 5 feriados:`, feriados.slice(0, 5));
+    // }
     
     let iteraciones = 0;
     const maxIteraciones = 1000; // Protección contra loops infinitos
@@ -1171,10 +1319,10 @@ function calcularFechaConDiasHabiles(fechaBase, dias, feriados) {
         
         if (esHabil) {
             diasRestantes--;
-            console.log(`✅ Día hábil encontrado: ${fechaStr}, días restantes: ${diasRestantes}`);
+            // console.log(`✅ Día hábil encontrado: ${fechaStr}, días restantes: ${diasRestantes}`);
         } else {
             const razon = esFinDeSemana(fecha) ? 'fin de semana' : 'feriado';
-            console.log(`⏭️ Día no hábil (${razon}): ${fechaStr}, días restantes: ${diasRestantes}`);
+            // console.log(`⏭️ Día no hábil (${razon}): ${fechaStr}, días restantes: ${diasRestantes}`);
         }
     }
     
@@ -1189,13 +1337,14 @@ function calcularFechaConDiasHabiles(fechaBase, dias, feriados) {
 
 // Calcular fechas CER basándose en intervalos (usando días hábiles desde cache)
 function calcularFechasCER() {
-    console.log('🔄 calcularFechasCER - Iniciando cálculo de fechas CER');
+    // Logs solo en modo debug (comentados para reducir ruido)
+    // console.log('🔄 calcularFechasCER - Iniciando cálculo de fechas CER');
     const intervaloInicio = parseInt(document.getElementById('intervaloInicio')?.value) || 0;
     const intervaloFin = parseInt(document.getElementById('intervaloFin')?.value) || 0;
     
-    console.log('📊 calcularFechasCER - Intervalos:', { inicio: intervaloInicio, fin: intervaloFin });
-    console.log('📊 calcularFechasCER - CacheCER:', cacheCER ? cacheCER.length : 0, 'registros');
-    console.log('📊 calcularFechasCER - CacheFeriados:', cacheFeriados ? cacheFeriados.length : 0, 'feriados');
+    // console.log('📊 calcularFechasCER - Intervalos:', { inicio: intervaloInicio, fin: intervaloFin });
+    // console.log('📊 calcularFechasCER - CacheCER:', cacheCER ? cacheCER.length : 0, 'registros');
+    // console.log('📊 calcularFechasCER - CacheFeriados:', cacheFeriados ? cacheFeriados.length : 0, 'feriados');
     
     // Si no hay intervalos, limpiar campos
     if (intervaloInicio === 0 && intervaloFin === 0) {
@@ -1220,17 +1369,17 @@ function calcularFechasCER() {
     
     rows.forEach(row => {
         const fechaInicioInput = row.querySelector('.fecha-inicio');
-        const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
+        const fechaFinDevInput = row.querySelector('.fecha-fin-dev');
         
         let fechaInicio = fechaInicioInput?.value;
-        let fechaLiquidacion = fechaLiquidacionInput?.value;
+        let fechaFinDev = fechaFinDevInput?.value;
         
         // Convertir de DD/MM/AAAA a YYYY-MM-DD si es necesario
         if (fechaInicio && /^\d{2}\/\d{2}\/\d{4}$/.test(fechaInicio)) {
             fechaInicio = convertirFechaDDMMAAAAaYYYYMMDD(fechaInicio);
         }
-        if (fechaLiquidacion && /^\d{2}\/\d{2}\/\d{4}$/.test(fechaLiquidacion)) {
-            fechaLiquidacion = convertirFechaDDMMAAAAaYYYYMMDD(fechaLiquidacion);
+        if (fechaFinDev && /^\d{2}\/\d{2}\/\d{4}$/.test(fechaFinDev)) {
+            fechaFinDev = convertirFechaDDMMAAAAaYYYYMMDD(fechaFinDev);
         }
         
         if (fechaInicio) {
@@ -1240,8 +1389,8 @@ function calcularFechasCER() {
             }
         }
         
-        if (fechaLiquidacion) {
-            const fecha = crearFechaDesdeString(fechaLiquidacion);
+        if (fechaFinDev) {
+            const fecha = crearFechaDesdeString(fechaFinDev);
             if (!fechaMax || fecha > fechaMax) {
                 fechaMax = fecha;
             }
@@ -1252,9 +1401,24 @@ function calcularFechasCER() {
     if (!fechaMin || !fechaMax) return;
     
     // Ajustar rango para incluir los días de intervalo (puede ser negativo)
-    const diasExtras = Math.max(Math.abs(intervaloInicio), Math.abs(intervaloFin)) + 10;
-    fechaMin.setDate(fechaMin.getDate() - diasExtras);
-    fechaMax.setDate(fechaMax.getDate() + diasExtras);
+    // Para intervalos negativos, necesitamos ir hacia atrás desde fechaMin
+    // Para intervalos positivos, necesitamos ir hacia adelante desde fechaMax
+    // Calcular el rango necesario considerando ambos intervalos
+    const diasExtrasInicio = Math.abs(intervaloInicio) + 30; // Buffer adicional para días no hábiles
+    const diasExtrasFin = Math.abs(intervaloFin) + 30; // Buffer adicional para días no hábiles
+    const diasExtras = Math.max(diasExtrasInicio, diasExtrasFin);
+    
+    // Ajustar fechaMin hacia atrás (para intervalos negativos desde fecha inicio)
+    const fechaMinAjustada = new Date(fechaMin);
+    fechaMinAjustada.setDate(fechaMinAjustada.getDate() - diasExtras);
+    
+    // Ajustar fechaMax hacia adelante (para intervalos positivos desde fecha liquidación)
+    const fechaMaxAjustada = new Date(fechaMax);
+    fechaMaxAjustada.setDate(fechaMaxAjustada.getDate() + diasExtras);
+    
+    // Usar las fechas ajustadas
+    fechaMin = fechaMinAjustada;
+    fechaMax = fechaMaxAjustada;
     
     const fechaDesdeStr = formatearFechaInput(fechaMin);
     const fechaHastaStr = formatearFechaInput(fechaMax);
@@ -1268,23 +1432,38 @@ function calcularFechasCER() {
         console.warn('💡 Use el botón "Actualizar CER y Feriados" para cargar los datos.');
         console.log('📊 CacheFeriados disponible:', cacheFeriados ? cacheFeriados.length : 0, 'feriados');
         console.log('📊 CacheFeriadosRango:', cacheFeriadosRango);
+        console.log('📊 Rango solicitado:', fechaDesdeStr, 'a', fechaHastaStr);
+        if (cacheFeriados && cacheFeriados.length > 0) {
+            // console.log('📊 Todos los feriados en cache:', cacheFeriados);
+        }
     } else {
-        console.log(`✅ calcularFechasCER - Usando ${feriados.length} feriados del cache para cálculos`);
+        // console.log(`✅ calcularFechasCER - Usando ${feriados.length} feriados del cache para cálculos`);
+        // console.log('📊 Feriados encontrados:', feriados);
     }
     
     // Calcular fechas CER para cada fila de cupones
     for (const row of rows) {
         const fechaInicioInput = row.querySelector('.fecha-inicio');
-        const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
+        const fechaFinDevInput = row.querySelector('.fecha-fin-dev');
         const fechaInicioCERInput = row.querySelector('.fecha-inicio-cer');
         const fechaFinalCERInput = row.querySelector('.fecha-final-cer');
         
-        if (!fechaInicioInput || !fechaLiquidacionInput || !fechaInicioCERInput || !fechaFinalCERInput) continue;
+        if (!fechaInicioInput || !fechaFinDevInput || !fechaInicioCERInput || !fechaFinalCERInput) continue;
         
         let fechaInicio = fechaInicioInput.value;
-        let fechaLiquidacion = fechaLiquidacionInput.value;
+        let fechaFinDev = fechaFinDevInput.value;
         
-        if (!fechaInicio || !fechaLiquidacion) {
+        // Si no hay fechaFinDev, intentar autocompletarla desde fechaLiquidacion
+        if (!fechaFinDev || fechaFinDev.trim() === '') {
+            const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
+            if (fechaLiquidacionInput && fechaLiquidacionInput.value) {
+                // Autocompletar fechaFinDev desde fechaLiquidacion - 1 día hábil
+                autocompletarFechaFinDev(fechaLiquidacionInput);
+                fechaFinDev = fechaFinDevInput.value;
+            }
+        }
+        
+        if (!fechaInicio || !fechaFinDev) {
             fechaInicioCERInput.value = '';
             fechaFinalCERInput.value = '';
             continue;
@@ -1294,80 +1473,106 @@ function calcularFechasCER() {
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaInicio)) {
             fechaInicio = convertirFechaDDMMAAAAaYYYYMMDD(fechaInicio);
         }
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaLiquidacion)) {
-            fechaLiquidacion = convertirFechaDDMMAAAAaYYYYMMDD(fechaLiquidacion);
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaFinDev)) {
+            fechaFinDev = convertirFechaDDMMAAAAaYYYYMMDD(fechaFinDev);
         }
         
         // Calcular fechas CER usando días hábiles (síncrono, usa cache)
         const fechaInicioDate = crearFechaDesdeString(fechaInicio);
-        const fechaLiquidacionDate = crearFechaDesdeString(fechaLiquidacion);
+        const fechaFinDevDate = crearFechaDesdeString(fechaFinDev);
         
-        if (fechaInicioDate && fechaLiquidacionDate) {
+        if (fechaInicioDate && fechaFinDevDate) {
+            // Verificar si hay feriados disponibles para este cupón específico
+            // Calcular rango específico para este cupón (con buffer para intervalos)
+            const diasBuffer = Math.max(Math.abs(intervaloInicio), Math.abs(intervaloFin)) + 30;
+            const fechaMinCupon = new Date(fechaInicioDate);
+            fechaMinCupon.setDate(fechaMinCupon.getDate() - diasBuffer);
+            const fechaMaxCupon = new Date(fechaFinDevDate);
+            fechaMaxCupon.setDate(fechaMaxCupon.getDate() + diasBuffer);
+            
+            const fechaDesdeCuponStr = formatearFechaInput(fechaMinCupon);
+            const fechaHastaCuponStr = formatearFechaInput(fechaMaxCupon);
+            const feriadosCupon = obtenerFeriadosCache(fechaDesdeCuponStr, fechaHastaCuponStr);
+            
+            // SIEMPRE usar TODOS los feriados del cache para asegurar que se consideren todos los feriados disponibles
+            // Esto es importante porque los feriados pueden estar fuera del rango calculado pero dentro del rango del cupón
+            // Prioridad: 1) Todos los feriados del cache, 2) Feriados específicos del cupón, 3) Feriados generales del rango
+            const feriadosAUsar = (cacheFeriados && cacheFeriados.length > 0) ? cacheFeriados : (feriadosCupon.length > 0 ? feriadosCupon : (feriados.length > 0 ? feriados : []));
+            
+            // console.log(`📊 calcularFechasCER - Cupón: Fecha Inicio ${formatearFechaInput(fechaInicioDate)}, Fecha fin Dev ${formatearFechaInput(fechaFinDevDate)}`);
+            // console.log(`📊 calcularFechasCER - Cupón: Feriados específicos (rango ${fechaDesdeCuponStr} a ${fechaHastaCuponStr}): ${feriadosCupon.length}, Feriados generales: ${feriados.length}, Cache total: ${cacheFeriados ? cacheFeriados.length : 0}, Usando: ${feriadosAUsar.length}`);
+            if (feriadosAUsar.length > 0) {
+                // Verificar si hay feriados en el rango del cupón
+                const feriadosEnRangoCupon = feriadosAUsar.filter(f => {
+                    const fechaFeriado = crearFechaDesdeString(f);
+                    if (!fechaFeriado) return false;
+                    return fechaFeriado >= fechaInicioDate && fechaFeriado <= fechaFinDevDate;
+                });
+                if (feriadosEnRangoCupon.length > 0) {
+                    console.log(`📊 Feriados dentro del rango del cupón:`, feriadosEnRangoCupon);
+                }
+            } else {
+                console.warn(`⚠️ calcularFechasCER - NO HAY FERIADOS DISPONIBLES para este cupón!`);
+                console.warn(`   Rango cupón: ${fechaDesdeCuponStr} a ${fechaHastaCuponStr}`);
+                console.warn(`   Cache total: ${cacheFeriados ? cacheFeriados.length : 0} feriados`);
+                if (cacheFeriados && cacheFeriados.length > 0) {
+                    console.warn(`   Feriados en cache:`, cacheFeriados);
+                }
+            }
+            
             // Fecha Inicio CER = Fecha Inicio + intervaloInicio días hábiles
-            console.log(`🔍 calcularFechasCER - Calculando Inicio Intervalo: Fecha Inicio ${formatearFechaInput(fechaInicioDate)}, Intervalo: ${intervaloInicio}, Feriados disponibles: ${feriados.length}`);
-            let fechaInicioCER = calcularFechaConDiasHabiles(fechaInicioDate, intervaloInicio, feriados);
+            // console.log(`🔍 calcularFechasCER - Calculando Inicio Intervalo: Fecha Inicio ${formatearFechaInput(fechaInicioDate)}, Intervalo: ${intervaloInicio}, Feriados disponibles: ${feriadosAUsar.length}`);
+            let fechaInicioCER = calcularFechaConDiasHabiles(fechaInicioDate, intervaloInicio, feriadosAUsar);
             
             // Validar contra fecha valuación (se hará después de calcular Final Intervalo también)
             if (fechaInicioCER) {
                 fechaInicioCERInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(fechaInicioCER));
-                console.log(`✅ calcularFechasCER - Inicio Intervalo calculado: ${formatearFechaInput(fechaInicioCER)}`);
+                // console.log(`✅ calcularFechasCER - Inicio Intervalo calculado: ${formatearFechaInput(fechaInicioCER)}`);
             } else {
                 console.warn(`⚠️ calcularFechasCER - No se pudo calcular Inicio Intervalo`);
             }
             
-            // Fecha Final CER = Fecha Liquidación + intervaloFin días hábiles
-            console.log(`🔍 calcularFechasCER - Calculando Final Intervalo: Fecha Liquidación ${formatearFechaInput(fechaLiquidacionDate)}, Intervalo: ${intervaloFin}, Feriados disponibles: ${feriados.length}`);
-            let fechaFinalCER = calcularFechaConDiasHabiles(fechaLiquidacionDate, intervaloFin, feriados);
+            // Fecha Final CER = Fecha fin Dev + intervaloFin días hábiles
+            // Solo calcular si fechaFinDevDate existe
+            let fechaFinalCER = null;
+            if (fechaFinDevDate) {
+                // console.log(`🔍 calcularFechasCER - Calculando Final Intervalo: Fecha fin Dev ${formatearFechaInput(fechaFinDevDate)}, Intervalo: ${intervaloFin}, Feriados disponibles: ${feriadosAUsar.length}`);
+                fechaFinalCER = calcularFechaConDiasHabiles(fechaFinDevDate, intervaloFin, feriadosAUsar);
+            } else {
+                console.warn(`⚠️ calcularFechasCER - No hay Fecha fin Dev para calcular Final Intervalo`);
+            }
             
-            // Validar contra fecha valuación
+            // Validar contra fecha valuación: si Final Intervalo > Fecha Valuación, usar Fecha Valuación
             const fechaValuacionInput = document.getElementById('fechaValuacion');
-            if (fechaValuacionInput && fechaValuacionInput.value) {
+            if (fechaValuacionInput && fechaValuacionInput.value && fechaFinalCER) {
                 let fechaValuacionStr = fechaValuacionInput.value;
                 if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaValuacionStr)) {
                     fechaValuacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaValuacionStr);
                 }
                 const fechaValuacionDate = crearFechaDesdeString(fechaValuacionStr);
                 
-                if (fechaValuacionDate) {
-                    // Validar Inicio Intervalo: si es mayor que fecha valuación, calcular como fecha valuación + intervaloInicio
-                    if (fechaInicioCER && fechaInicioCER > fechaValuacionDate) {
-                        console.log(`⚠️ calcularFechasCER - Inicio Intervalo (${formatearFechaInput(fechaInicioCER)}) es mayor que Fecha Valuación (${formatearFechaInput(fechaValuacionDate)}), recalculando desde fecha valuación...`);
-                        fechaInicioCER = calcularFechaConDiasHabiles(fechaValuacionDate, intervaloInicio, feriados);
-                        if (fechaInicioCER) {
-                            fechaInicioCERInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(fechaInicioCER));
-                            fechaInicioCERInput.classList.add('intervalo-ajustado');
-                        }
-                    } else if (fechaInicioCER) {
-                        fechaInicioCERInput.classList.remove('intervalo-ajustado');
-                    }
-                    
-                    // Validar Final Intervalo: si es mayor que fecha valuación, calcular como fecha valuación + intervaloFin
-                    if (fechaFinalCER && fechaFinalCER > fechaValuacionDate) {
-                        console.log(`⚠️ calcularFechasCER - Final Intervalo (${formatearFechaInput(fechaFinalCER)}) es mayor que Fecha Valuación (${formatearFechaInput(fechaValuacionDate)}), recalculando desde fecha valuación...`);
-                        fechaFinalCER = calcularFechaConDiasHabiles(fechaValuacionDate, intervaloFin, feriados);
-                        if (fechaFinalCER) {
-                            fechaFinalCERInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(fechaFinalCER));
-                            fechaFinalCERInput.classList.add('intervalo-ajustado');
-                        }
-                    } else if (fechaFinalCER) {
-                        fechaFinalCERInput.classList.remove('intervalo-ajustado');
-                    }
+                if (fechaValuacionDate && fechaFinalCER > fechaValuacionDate) {
+                    // console.log(`⚠️ calcularFechasCER - Final Intervalo (${formatearFechaInput(fechaFinalCER)}) es mayor que Fecha Valuación (${formatearFechaInput(fechaValuacionDate)}), usando Fecha Valuación`);
+                    fechaFinalCER = fechaValuacionDate;
+                    fechaFinalCERInput.classList.add('intervalo-ajustado');
+                } else if (fechaFinalCERInput) {
+                    fechaFinalCERInput.classList.remove('intervalo-ajustado');
                 }
             }
             
             if (fechaFinalCER) {
                 fechaFinalCERInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(fechaFinalCER));
-                console.log(`✅ calcularFechasCER - Final Intervalo calculado: ${formatearFechaInput(fechaFinalCER)}`);
+                // console.log(`✅ calcularFechasCER - Final Intervalo calculado: ${formatearFechaInput(fechaFinalCER)}`);
             } else {
                 console.warn(`⚠️ calcularFechasCER - No se pudo calcular Final Intervalo`);
             }
             
-            console.log('🔍 calcularFechasCER - Procesando fila:', {
-                fechaInicio: fechaInicioInput?.value,
-                fechaLiquidacion: fechaLiquidacionInput?.value,
-                fechaInicioCER: fechaInicioCER ? formatearFechaInput(fechaInicioCER) : null,
-                fechaFinalCER: fechaFinalCER ? formatearFechaInput(fechaFinalCER) : null
-            });
+            // console.log('🔍 calcularFechasCER - Procesando fila:', {
+            //     fechaInicio: fechaInicioInput?.value,
+            //     fechaFinDev: fechaFinDevInput?.value,
+            //     fechaInicioCER: fechaInicioCER ? formatearFechaInput(fechaInicioCER) : null,
+            //     fechaFinalCER: fechaFinalCER ? formatearFechaInput(fechaFinalCER) : null
+            // });
             
             // En calculadora variable, no se autocompletan valores CER, solo se calculan las fechas
             // Las fechas se usan para calcular el promedio aritmético de TAMAR/BADLAR
@@ -1411,25 +1616,8 @@ function calcularFechasCER() {
                 console.log(`🔍 calcularFechasCER - Calculando Final Intervalo Inversión: Fecha Liquidación ${formatearFechaInput(fechaLiquidacionDate)}, Intervalo: ${intervaloFin}, Feriados disponibles: ${feriados.length}`);
                 let fechaFinalIntervalo = calcularFechaConDiasHabiles(fechaLiquidacionDate, intervaloFin, feriados);
                 
-                // Validar contra fecha valuación
-                const fechaValuacionInput = document.getElementById('fechaValuacion');
-                if (fechaValuacionInput && fechaValuacionInput.value) {
-                    let fechaValuacionStr = fechaValuacionInput.value;
-                    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaValuacionStr)) {
-                        fechaValuacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaValuacionStr);
-                    }
-                    const fechaValuacionDate = crearFechaDesdeString(fechaValuacionStr);
-                    
-                    if (fechaValuacionDate && fechaFinalIntervalo && fechaFinalIntervalo > fechaValuacionDate) {
-                        console.log(`⚠️ calcularFechasCER - Final Intervalo Inversión (${formatearFechaInput(fechaFinalIntervalo)}) es mayor que Fecha Valuación (${formatearFechaInput(fechaValuacionDate)}), recalculando desde fecha valuación...`);
-                        fechaFinalIntervalo = calcularFechaConDiasHabiles(fechaValuacionDate, intervaloFin, feriados);
-                        if (fechaFinalIntervalo && fechaFinalIntervaloInput) {
-                            fechaFinalIntervaloInput.classList.add('intervalo-ajustado');
-                        }
-                    } else if (fechaFinalIntervaloInput) {
-                        fechaFinalIntervaloInput.classList.remove('intervalo-ajustado');
-                    }
-                }
+                // Siempre respetar fecha inicio/fin usando intervaloInicio e intervaloFin
+                // No validar contra fecha valuación - siempre usar las fechas calculadas desde fecha liquidación
                 
                 if (fechaFinalIntervalo && fechaFinalIntervaloInput) {
                     fechaFinalIntervaloInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(fechaFinalIntervalo));
@@ -1867,10 +2055,10 @@ function recalcularFlujos(row) {
         // Flujos inversión: -(Precio compra × Cantidad partida) (negativo)
         if (cantidadPartida > 0 && precioCompra > 0) {
             const flujos = -(precioCompra * cantidadPartida); // Negativo
-            const valorTruncado = window.truncarDecimal ? window.truncarDecimal(flujos, 12) : parseFloat(flujos.toFixed(12));
-            flujosInput.value = valorTruncado;
+            // No truncar/redondear el resultado, usar el valor calculado directamente
+            flujosInput.value = flujos;
             if (DEBUG_FLUJOS) {
-                console.log('✅ recalcularFlujos - Flujo inversión calculado:', valorTruncado);
+                console.log('✅ recalcularFlujos - Flujo inversión calculado:', flujos);
             }
         } else {
             flujosInput.value = '';
@@ -1878,12 +2066,14 @@ function recalcularFlujos(row) {
         }
     } else if (tipo === 'cupon') {
         // Flujos cupones: Cantidad partida × (Renta nominal / 100 + Amortización / 100)
+        // Usar los valores ya truncados/redondeados de los inputs
         const rentaNominal = parseFloat(row.querySelector('.renta-nominal')?.value) || 0;
         const amortizacion = parseFloat(row.querySelector('.amortizacion')?.value) || 0;
         
+        // Calcular flujos usando los valores ya truncados/redondeados (sin truncar/redondear el resultado)
         const flujos = cantidadPartida * (rentaNominal / 100 + amortizacion / 100);
-        const valorTruncado = window.truncarDecimal ? window.truncarDecimal(flujos, 12) : parseFloat(flujos.toFixed(12));
-        flujosInput.value = valorTruncado;
+        // No truncar/redondear el resultado, usar el valor calculado directamente
+        flujosInput.value = flujos;
     }
     
     // Actualizar flujos descontados y sumatoria si hay una TIR calculada
@@ -2592,9 +2782,22 @@ function calcularRentaNominal(input) {
     
     const rentaNominalInput = row.querySelector('.renta-nominal');
     if (rentaNominalInput) {
+        // Asegurar que decimalesRentaNominal esté inicializado
+        if (typeof window.decimalesRentaNominal === 'undefined') {
+            window.decimalesRentaNominal = 4;
+        }
+        
         // Renta Nominal = Renta TNA × Day Count Factor × (Valor Residual / 100)
         const rentaNominal = rentaTNA * dayCountFactor * (valorResidual / 100);
-        rentaNominalInput.value = window.truncarDecimal ? window.truncarDecimal(rentaNominal, 12) : parseFloat(rentaNominal.toFixed(12));
+        const decimales = window.decimalesRentaNominal || 4;
+        
+        // Usar truncarDecimal si está disponible, sino usar toFixed pero mantener como string para preservar decimales
+        if (window.truncarDecimal) {
+            rentaNominalInput.value = window.truncarDecimal(rentaNominal, decimales);
+        } else {
+            // Usar toFixed para mantener todos los decimales, no parseFloat que puede perder precisión
+            rentaNominalInput.value = rentaNominal.toFixed(decimales);
+        }
         
         // Recalcular renta ajustada y flujos después de actualizar renta nominal
         setTimeout(() => {
@@ -2660,6 +2863,12 @@ async function autocompletarCupones() {
         if (mesesPeriodo === 0) {
             showError('Periodicidad inválida');
             return;
+        }
+        
+        // Mostrar la tabla si está oculta
+        const tableContainer = document.getElementById('cashflowTableContainer');
+        if (tableContainer) {
+            tableContainer.style.display = 'block';
         }
         
         // Limpiar cupones existentes (excepto la fila de inversión)
@@ -2809,15 +3018,18 @@ async function autocompletarCupones() {
                     <input type="text" class="input-table date-input fecha-inicio" id="fechaInicio${cuponCount}" value="${fechaInicioDDMM}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
                 </td>
                 <td>
-                    <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionDDMM}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
+                    <input type="text" class="input-table date-input fecha-fin-dev" id="fechaFinDev${cuponCount}" value="" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularFechasCER()" />
                 </td>
                 <td>
+                    <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionDDMM}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this); autocompletarFechaFinDev(this)" />
+                </td>
+                <td class="autocomplete-column">
                     <input type="text" class="input-table date-input fecha-inicio-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
                 </td>
-                <td>
+                <td class="autocomplete-column">
                     <input type="text" class="input-table date-input fecha-final-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
                 </td>
-                <td><input type="number" class="input-table day-count-factor" readonly /></td>
+                <td class="autocomplete-column"><input type="number" class="input-table day-count-factor" readonly /></td>
                 <td><input type="number" class="input-table amortizacion" step="0.01" /></td>
                 <td><input type="number" class="input-table valor-residual" step="0.01" /></td>
                 <td><input type="text" class="input-table renta-nominal" step="0.01" readonly /></td>
@@ -2841,6 +3053,12 @@ async function autocompletarCupones() {
             `;
             
             tbody.appendChild(row);
+            
+            // Aplicar máscara a los campos de fecha
+            const fechaInputs = row.querySelectorAll('.date-input');
+            fechaInputs.forEach(input => {
+                aplicarMascaraFecha(input);
+            });
             
             // Agregar event listeners programáticamente para asegurar que funcionen
             const amortizacionInput = row.querySelector('.amortizacion');
@@ -2869,6 +3087,10 @@ async function autocompletarCupones() {
             const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
             if (fechaInicioInput && fechaLiquidacionInput && fechaInicioInput.value && fechaLiquidacionInput.value) {
                 calcularDayCountFactor(fechaLiquidacionInput);
+                // Autocompletar Fecha fin Dev si hay fecha liquidación
+                setTimeout(() => {
+                    autocompletarFechaFinDev(fechaLiquidacionInput);
+                }, 100);
                 calcularFechasCER();
                 
                 // Recalcular renta nominal si hay valores
@@ -2893,12 +3115,6 @@ async function autocompletarCupones() {
                     }
                 });
             }
-            
-            // Aplicar máscara a los nuevos campos de fecha
-            const fechaInputs = row.querySelectorAll('.date-input');
-            fechaInputs.forEach(input => {
-                aplicarMascaraFecha(input);
-            });
         });
         
         const mensaje = fechaCompraDate 
@@ -4081,9 +4297,63 @@ async function pedirTituloModal() {
 function aplicarMascaraFecha(input) {
     if (!input) return;
     
-    input.addEventListener('input', function(e) {
-        let valor = e.target.value.replace(/\D/g, ''); // Solo números
+    // Manejar teclas de borrado (Backspace y Delete)
+    input.addEventListener('keydown', function(e) {
+        const input = e.target;
+        const cursorPos = input.selectionStart;
+        const valor = input.value;
         
+        // Si se presiona Backspace o Delete
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+            // Si hay texto seleccionado, permitir borrado normal
+            if (input.selectionStart !== input.selectionEnd) {
+                return; // Permitir borrado normal
+            }
+            
+            // Si se está borrando una barra, también borrar el carácter adyacente
+            if (e.key === 'Backspace' && cursorPos > 0) {
+                const charAntes = valor[cursorPos - 1];
+                if (charAntes === '/') {
+                    e.preventDefault();
+                    // Borrar la barra y el carácter antes de ella
+                    const nuevoValor = valor.substring(0, cursorPos - 2) + valor.substring(cursorPos);
+                    input.value = nuevoValor;
+                    // Reposicionar cursor
+                    setTimeout(() => {
+                        input.setSelectionRange(cursorPos - 2, cursorPos - 2);
+                    }, 0);
+                    return;
+                }
+            }
+            
+            if (e.key === 'Delete' && cursorPos < valor.length) {
+                const charDespues = valor[cursorPos];
+                if (charDespues === '/') {
+                    e.preventDefault();
+                    // Borrar la barra y el carácter después de ella
+                    const nuevoValor = valor.substring(0, cursorPos) + valor.substring(cursorPos + 2);
+                    input.value = nuevoValor;
+                    // Mantener cursor en la misma posición
+                    setTimeout(() => {
+                        input.setSelectionRange(cursorPos, cursorPos);
+                    }, 0);
+                    return;
+                }
+            }
+        }
+    });
+    
+    input.addEventListener('input', function(e) {
+        const input = e.target;
+        let valor = input.value.replace(/\D/g, ''); // Solo números
+        
+        // Si se borró todo, limpiar el campo
+        if (valor === '') {
+            input.value = '';
+            return;
+        }
+        
+        // Aplicar formato con barras
         if (valor.length >= 2) {
             valor = valor.substring(0, 2) + '/' + valor.substring(2);
         }
@@ -4091,7 +4361,30 @@ function aplicarMascaraFecha(input) {
             valor = valor.substring(0, 5) + '/' + valor.substring(5, 9);
         }
         
-        e.target.value = valor;
+        // Limitar a 10 caracteres (DD/MM/AAAA)
+        if (valor.length > 10) {
+            valor = valor.substring(0, 10);
+        }
+        
+        const cursorPosAntes = input.selectionStart;
+        input.value = valor;
+        
+        // Ajustar posición del cursor después de agregar barras
+        let nuevaPosicion = cursorPosAntes;
+        if (valor.length === 3 && cursorPosAntes === 2) {
+            // Si se acaba de agregar la primera barra, mover cursor después
+            nuevaPosicion = 3;
+        } else if (valor.length === 6 && cursorPosAntes === 5) {
+            // Si se acaba de agregar la segunda barra, mover cursor después
+            nuevaPosicion = 6;
+        } else if (valor.length < cursorPosAntes) {
+            // Si se borró algo, mantener posición relativa
+            nuevaPosicion = Math.min(cursorPosAntes, valor.length);
+        }
+        
+        setTimeout(() => {
+            input.setSelectionRange(nuevaPosicion, nuevaPosicion);
+        }, 0);
     });
     
     input.addEventListener('blur', function(e) {
@@ -4429,6 +4722,12 @@ async function cargarCalculadora(titulo) {
         
         // Cargar cashflow (cupones y fila de inversión)
         if (datos.cashflow && datos.cashflow.length > 0) {
+            // Mostrar la tabla si está oculta
+            const tableContainer = document.getElementById('cashflowTableContainer');
+            if (tableContainer) {
+                tableContainer.style.display = 'block';
+            }
+            
             // Limpiar cupones existentes
             const tbody = document.getElementById('cashflowBody');
             const filasCupones = tbody.querySelectorAll('tr[data-tipo="cupon"]');
@@ -4485,7 +4784,10 @@ async function cargarCalculadora(titulo) {
                         <input type="text" class="input-table date-input fecha-inicio" id="fechaInicio${cuponCount}" value="${fechaInicioStr || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
                     </td>
                     <td>
-                        <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionStr || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
+                        <input type="text" class="input-table date-input fecha-fin-dev" id="fechaFinDev${cuponCount}" value="" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularFechasCER()" />
+                    </td>
+                    <td>
+                        <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionStr || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this); autocompletarFechaFinDev(this)" />
                     </td>
                     <td class="autocomplete-column">
                         <input type="text" class="input-table date-input fecha-inicio-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
@@ -4524,11 +4826,15 @@ async function cargarCalculadora(titulo) {
                     aplicarMascaraFecha(input);
                 });
                 
-                // Calcular Day Count Factor si hay fechas
+                // Calcular Day Count Factor si hay fechas y autocompletar Fecha fin Dev
                 const fechaInicioInput = row.querySelector('.fecha-inicio');
                 const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
                 if (fechaInicioInput && fechaLiquidacionInput && fechaInicioInput.value && fechaLiquidacionInput.value) {
                     calcularDayCountFactor(fechaLiquidacionInput);
+                    // Autocompletar Fecha fin Dev si hay fecha liquidación
+                    setTimeout(() => {
+                        autocompletarFechaFinDev(fechaLiquidacionInput);
+                    }, 100);
                 }
                 
                 // Agregar event listeners programáticamente para asegurar que funcionen
@@ -4736,7 +5042,7 @@ function guardarDatosLocalStorage() {
             fechaValuacion: fechaValuacion
         };
         
-        localStorage.setItem('calculadoraCER_datos', JSON.stringify(datos));
+        localStorage.setItem('calculadoraVariable_datos', JSON.stringify(datos));
     } catch (error) {
         console.error('Error al guardar en localStorage:', error);
     }
@@ -4745,8 +5051,23 @@ function guardarDatosLocalStorage() {
 // Cargar datos desde localStorage
 function cargarDatosLocalStorage() {
     try {
-        const datosGuardados = localStorage.getItem('calculadoraCER_datos');
-        if (!datosGuardados) return;
+        const datosGuardados = localStorage.getItem('calculadoraVariable_datos');
+        if (!datosGuardados) {
+            // Si no hay datos guardados, asegurar que solo esté la fila de inversión vacía
+            const tbody = document.getElementById('cashflowBody');
+            if (tbody) {
+                // Limpiar todos los cupones existentes
+                const filasCupones = tbody.querySelectorAll('tr[data-tipo="cupon"]');
+                filasCupones.forEach(fila => fila.remove());
+                cuponCount = 0;
+            }
+            // Ocultar la tabla si no hay datos
+            const tableContainer = document.getElementById('cashflowTableContainer');
+            if (tableContainer) {
+                tableContainer.style.display = 'none';
+            }
+            return;
+        }
         
         const datos = JSON.parse(datosGuardados);
         
@@ -4900,6 +5221,12 @@ function cargarDatosLocalStorage() {
         
         // Cargar cupones desde localStorage
         if (datos.cashflow && datos.cashflow.length > 0) {
+            // Mostrar la tabla si está oculta
+            const tableContainer = document.getElementById('cashflowTableContainer');
+            if (tableContainer) {
+                tableContainer.style.display = 'block';
+            }
+            
             // Limpiar cupones existentes (excepto la fila de inversión)
             const tbody = document.getElementById('cashflowBody');
             const filasCupones = tbody.querySelectorAll('tr[data-tipo="cupon"]');
@@ -4930,13 +5257,19 @@ function cargarDatosLocalStorage() {
                     );
                     const numeroCupon = indiceCupon >= 0 ? indiceCupon + 1 : cuponCount;
                     
+                    // Convertir fechaFinDev si existe
+                    const fechaFinDevDDMM = cupon.fechaFinDev ? convertirFechaYYYYMMDDaDDMMAAAA(cupon.fechaFinDev) : '';
+                    
                     row.innerHTML = `
                         <td style="text-align: center; font-weight: 600; color: var(--text-primary);">${numeroCupon}</td>
                         <td>
                             <input type="text" class="input-table date-input fecha-inicio" id="fechaInicio${cuponCount}" value="${fechaInicioDDMM || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
                         </td>
                         <td>
-                            <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionDDMM || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
+                            <input type="text" class="input-table date-input fecha-fin-dev" id="fechaFinDev${cuponCount}" value="${fechaFinDevDDMM || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularFechasCER()" />
+                        </td>
+                        <td>
+                            <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionDDMM || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this); autocompletarFechaFinDev(this)" />
                         </td>
                         <td class="autocomplete-column">
                             <input type="text" class="input-table date-input fecha-inicio-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
@@ -4951,8 +5284,8 @@ function cargarDatosLocalStorage() {
                         <td><input type="text" class="input-table renta-tna" value="${cupon.rentaTNA || ''}" onchange="calcularRentaNominal(this); recalcularFlujos(this.closest('tr'));" onblur="convertirNumeroDecimal(this)" /></td>
                         <td><input type="number" class="input-table factor-actualizacion" step="0.0001" readonly value="${cupon.factorActualizacion || ''}" /></td>
                         <td><input type="number" class="input-table pagos-actualizados" step="0.01" readonly value="${cupon.pagosActualizados || ''}" /></td>
-                        <td><input type="number" class="input-table flujos" step="0.01" readonly value="${cupon.flujos || ''}" /></td>
-                        <td><input type="number" class="input-table flujos-desc-fecha-compra" step="0.01" readonly value="${cupon.flujosDescFechaCompra || ''}" /></td>
+                        <td class="flujos-column"><input type="number" class="input-table flujos" step="0.01" readonly value="${cupon.flujos || ''}" /></td>
+                        <td class="flujos-column"><input type="number" class="input-table flujos-desc-fecha-compra" step="0.01" readonly value="${cupon.flujosDescFechaCompra || ''}" /></td>
                         <td style="display: flex; gap: 4px; align-items: center; justify-content: center;">
                             <button onclick="abrirTasaConFiltros('${tipoTasa}', ${cuponCount})" style="background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" title="Ver ${tipoTasa.toUpperCase()}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#5f6368">
@@ -5066,9 +5399,105 @@ function cargarDatosLocalStorage() {
     }
 }
 
+// Variables globales para decimales editables
+window.decimalesRentaTNA = 4;
+window.decimalesRentaNominal = 4;
+
+// Función para actualizar decimales de Renta TNA
+function actualizarDecimalesRentaTNA(valor) {
+    const decimales = parseInt(valor) || 4;
+    if (decimales < 0 || decimales > 20) {
+        showError('Los decimales deben estar entre 0 y 20');
+        return;
+    }
+    window.decimalesRentaTNA = decimales;
+    // Recalcular todos los valores de Renta TNA y sus flujos
+    const rentaTNAInputs = document.querySelectorAll('.renta-tna');
+    rentaTNAInputs.forEach(input => {
+        if (input.value) {
+            const valor = parseFloat(input.value) || 0;
+            input.value = valor.toFixed(decimales);
+            // Recalcular renta nominal y flujos
+            const row = input.closest('tr');
+            if (row) {
+                calcularRentaNominal(input);
+                recalcularFlujos(row);
+            }
+        }
+    });
+}
+
+// Función para actualizar decimales de Renta Nominal
+function actualizarDecimalesRentaNominal(valor) {
+    const decimales = parseInt(valor) || 4;
+    if (decimales < 0 || decimales > 20) {
+        showError('Los decimales deben estar entre 0 y 20');
+        return;
+    }
+    window.decimalesRentaNominal = decimales;
+    // Recalcular todos los valores de Renta Nominal y sus flujos
+    const rentaNominalInputs = document.querySelectorAll('.renta-nominal');
+    rentaNominalInputs.forEach(input => {
+        if (input.value) {
+            const row = input.closest('tr');
+            const rentaTNAInput = row?.querySelector('.renta-tna');
+            const dayCountFactorInput = row?.querySelector('.day-count-factor');
+            const valorResidualInput = row?.querySelector('.valor-residual');
+            
+            if (rentaTNAInput && dayCountFactorInput && valorResidualInput) {
+                const rentaTNA = parseFloat(rentaTNAInput.value) || 0;
+                const dayCountFactor = parseFloat(dayCountFactorInput.value) || 0;
+                const valorResidual = parseFloat(valorResidualInput.value) || 100;
+                const rentaNominal = rentaTNA * dayCountFactor * (valorResidual / 100);
+                // Truncar renta nominal según el nuevo número de decimales
+                input.value = window.truncarDecimal ? window.truncarDecimal(rentaNominal, decimales) : parseFloat(rentaNominal.toFixed(decimales));
+                // Recalcular flujos usando el valor ya truncado (sin truncar el resultado del flujo)
+                recalcularFlujos(row);
+            }
+        }
+    });
+}
+
 // Inicialización al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Calculadora CER inicializada');
+    console.log('Calculadora Variable inicializada');
+    
+    // Asegurar que los decimales estén inicializados
+    if (typeof window.decimalesRentaTNA === 'undefined') {
+        window.decimalesRentaTNA = 4;
+    }
+    if (typeof window.decimalesRentaNominal === 'undefined') {
+        window.decimalesRentaNominal = 4;
+    }
+    
+    // Actualizar los inputs de decimales si existen
+    // Los inputs de tipo number necesitan que se establezca el valor explícitamente
+    const decimalesRentaTNAInput = document.getElementById('decimalesRentaTNA');
+    if (decimalesRentaTNAInput) {
+        // Leer el valor del atributo value del HTML si existe, sino usar el valor por defecto
+        const valorHTML = decimalesRentaTNAInput.getAttribute('value');
+        if (valorHTML && valorHTML !== '') {
+            decimalesRentaTNAInput.value = valorHTML;
+            window.decimalesRentaTNA = parseInt(valorHTML) || 4;
+        } else if (!decimalesRentaTNAInput.value || decimalesRentaTNAInput.value === '') {
+            decimalesRentaTNAInput.value = window.decimalesRentaTNA || 4;
+        } else {
+            window.decimalesRentaTNA = parseInt(decimalesRentaTNAInput.value) || 4;
+        }
+    }
+    const decimalesRentaNominalInput = document.getElementById('decimalesRentaNominal');
+    if (decimalesRentaNominalInput) {
+        // Leer el valor del atributo value del HTML si existe, sino usar el valor por defecto
+        const valorHTML = decimalesRentaNominalInput.getAttribute('value');
+        if (valorHTML && valorHTML !== '') {
+            decimalesRentaNominalInput.value = valorHTML;
+            window.decimalesRentaNominal = parseInt(valorHTML) || 4;
+        } else if (!decimalesRentaNominalInput.value || decimalesRentaNominalInput.value === '') {
+            decimalesRentaNominalInput.value = window.decimalesRentaNominal || 4;
+        } else {
+            window.decimalesRentaNominal = parseInt(decimalesRentaNominalInput.value) || 4;
+        }
+    }
     
     // Agregar event listener para el botón "Cargar"
     const btnCargar = document.getElementById('btnCargar');
@@ -5128,6 +5557,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 250);
         });
     }
+    
+    // Cargar datos guardados en localStorage al iniciar
+    cargarDatosLocalStorage();
     
     // Cargar feriados y CER desde BD al iniciar (NO cargar calculadora automáticamente)
     cargarDatosDesdeBD().then(() => {

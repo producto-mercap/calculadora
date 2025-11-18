@@ -482,7 +482,7 @@ select.input {
     hyphens: auto;
 }
 
-/* Excepciones para columnas específicas que deben ser más angostas */
+/* Excepción: primera columna (Cupón) más angosta */
 .cashflow-table th:first-child,
 .cashflow-table td:first-child {
     width: 30px !important;
@@ -490,33 +490,23 @@ select.input {
     min-width: 30px !important;
 }
 
-/* Columnas específicas: Amortiz. (9), Valor Residual (10), Renta TNA (13), Acciones (última) */
+/* Columnas Amortización y Valor Residual más angostas */
+/* Para tabla variable: columnas 8 y 9 */
+.cashflow-table th:nth-child(8),
+.cashflow-table td:nth-child(8),
 .cashflow-table th:nth-child(9),
 .cashflow-table td:nth-child(9) {
-    width: 50px !important;
-    max-width: 50px !important;
-    min-width: 50px !important;
+    width: 60px !important;
+    max-width: 60px !important;
+    min-width: 60px !important;
 }
 
+/* Para tabla CER: columnas 9 y 10 también (por si acaso) */
 .cashflow-table th:nth-child(10),
 .cashflow-table td:nth-child(10) {
-    width: 50px !important;
-    max-width: 50px !important;
-    min-width: 50px !important;
-}
-
-.cashflow-table th:nth-child(13),
-.cashflow-table td:nth-child(13) {
-    width: 50px !important;
-    max-width: 50px !important;
-    min-width: 50px !important;
-}
-
-.cashflow-table th:last-child,
-.cashflow-table td:last-child {
-    width: 40px !important;
-    max-width: 40px !important;
-    min-width: 40px !important;
+    width: 60px !important;
+    max-width: 60px !important;
+    min-width: 60px !important;
 }
 
 .cashflow-table td,

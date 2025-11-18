@@ -68,8 +68,9 @@
                     </div>
                     
                     <!-- Tabla de cashflow -->
-                    <div style="overflow-x: auto;">
-                        <table class="cashflow-table" id="cashflowTable">
+                    <div id="cashflowTableContainer" style="display: none;">
+                        <div style="overflow-x: auto;">
+                            <table class="cashflow-table" id="cashflowTable">
                             <thead>
                                 <tr>
                                     <th style="width: 30px; min-width: 30px;">Cupón</th>
@@ -80,11 +81,17 @@
                                     <th class="cer-column autocomplete-column" title="Valor CER correspondiente a la fecha de inicio intervalo">Valor CER<br>Inicio</th>
                                     <th class="cer-column autocomplete-column" title="Valor CER correspondiente a la fecha de final intervalo">Valor CER<br>Final</th>
                                     <th class="autocomplete-column" title="Fracción año cupón (según base de días)">Day Count<br>Factor</th>
-                                    <th style="width: 50px; min-width: 50px;" title="Input partida">Amortiz.</th>
-                                    <th style="width: 50px; min-width: 50px;" title="Valor residual del cupón (inicia en 100, se reduce con amortizaciones)">Valor<br>Residual</th>
+                                    <th title="Input partida" style="width: 60px; min-width: 60px; max-width: 60px;">Amortiz.</th>
+                                    <th title="Valor residual del cupón (inicia en 100, se reduce con amortizaciones)" style="width: 60px; min-width: 60px; max-width: 60px;">Valor<br>Residual</th>
                                     <th title="Amortización × Coeficiente CER emisión">Amortiz.<br>Ajustada</th>
-                                    <th title="Renta TNA × Day Count Factor">Renta<br>Nominal</th>
-                                    <th style="width: 50px; min-width: 50px;" title="Input partida">Renta<br>TNA</th>
+                                    <th title="Renta TNA × Day Count Factor (truncar a 12 decimales)">
+                                        Renta<br>Nominal<br>
+                                        <input type="number" id="decimalesRentaNominal" value="4" min="0" max="20" style="width: 35px; font-size: 9px; padding: 2px; border: 1px solid #dadce0; border-radius: 4px; text-align: center; margin-top: 4px;" onchange="actualizarDecimalesRentaNominal(this.value)" title="Decimales para truncar">
+                                    </th>
+                                    <th style="width: 50px; min-width: 50px;" title="Input partida (redondear a 4 decimales)">
+                                        Renta<br>TNA<br>
+                                        <input type="number" id="decimalesRentaTNA" value="4" min="0" max="20" style="width: 35px; font-size: 9px; padding: 2px; border: 1px solid #dadce0; border-radius: 4px; text-align: center; margin-top: 4px;" onchange="actualizarDecimalesRentaTNA(this.value)" title="Decimales para redondear">
+                                    </th>
                                     <th title="Renta Nominal × Coeficiente CER emisión × (Valor Residual / 100)">Renta<br>Ajustada</th>
                                     <th title="Factor de actualización">Factor<br>Actualiz.</th>
                                     <th title="Pagos actualizados">Pagos<br>Actualiz.</th>
@@ -136,6 +143,7 @@
                                 </tr>
                             </tfoot>
                         </table>
+                        </div>
                     </div>
                     
                     <!-- Footer con botón calcular y resultado -->

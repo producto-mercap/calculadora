@@ -680,3 +680,145 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Abrir modal de nuevo feriado
+function abrirModalNuevoFeriado() {
+    const modal = document.getElementById('modalNuevoFeriado');
+    if (modal) {
+        modal.style.display = 'flex';
+        
+        // Limpiar campos
+        const fechaInput = document.getElementById('nuevoFeriadoFecha');
+        const nombreInput = document.getElementById('nuevoFeriadoNombre');
+        if (fechaInput) fechaInput.value = '';
+        if (nombreInput) nombreInput.value = '';
+    }
+}
+
+// Cerrar modal de nuevo feriado
+function cerrarModalNuevoFeriado() {
+    const modal = document.getElementById('modalNuevoFeriado');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Guardar nuevo feriado
+async function guardarNuevoFeriado() {
+    const fechaInput = document.getElementById('nuevoFeriadoFecha');
+    const nombreInput = document.getElementById('nuevoFeriadoNombre');
+    const btnGuardar = document.getElementById('btnGuardarNuevoFeriado');
+    
+    if (!fechaInput || !nombreInput || !btnGuardar) {
+        showError('Error: No se encontraron los campos del formulario');
+        return;
+    }
+    
+    const fecha = fechaInput.value.trim();
+    const nombre = nombreInput.value.trim();
+    
+    // Validar campos
+    if (!fecha) {
+        showError('Por favor, ingrese una fecha');
+        fechaInput.focus();
+        return;
+    }
+    
+    if (!nombre) {
+        showError('Por favor, ingrese un nombre para el feriado');
+        nombreInput.focus();
+        return;
+    }
+    
+    // Validar formato de fecha (DD-MM-AAAA o DD/MM/AAAA)
+    if (!validarFechaDDMMAAAA(fecha)) {
+        showError('Por favor, ingrese una fecha válida en formato DD-MM-AAAA');
+        fechaInput.focus();
+        return;
+    }
+    
+    // Convertir fecha a YYYY-MM-DD para el backend
+    const fechaYYYYMMDD = convertirFechaDDMMAAAAaYYYYMMDD(fecha);
+    if (!fechaYYYYMMDD) {
+        showError('Error al convertir la fecha. Por favor, verifique el formato.');
+        fechaInput.focus();
+        return;
+    }
+    
+    // Deshabilitar botón mientras se guarda
+    btnGuardar.disabled = true;
+    btnGuardar.textContent = 'Guardando...';
+    
+    try {
+        const response = await fetch('/api/feriados/nuevo', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fecha: fechaYYYYMMDD,
+                nombre: nombre,
+                tipo: '' // Tipo vacío por defecto
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('Feriado guardado exitosamente');
+            cerrarModalNuevoFeriado();
+            
+            // Recargar la página para mostrar el nuevo feriado
+            window.location.reload();
+        } else {
+            showError(result.error || 'Error al guardar el feriado');
+        }
+    } catch (error) {
+        console.error('Error al guardar feriado:', error);
+        showError('Error al guardar el feriado: ' + error.message);
+    } finally {
+        // Rehabilitar botón
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = 'Guardar';
+    }
+}
+
+// Función para mostrar mensaje de éxito
+function showSuccess(message) {
+    // Crear o actualizar mensaje de éxito
+    let successDiv = document.getElementById('successMessage');
+    if (!successDiv) {
+        successDiv = document.createElement('div');
+        successDiv.id = 'successMessage';
+        successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #1e8e3e; color: white; padding: 16px 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 10001; max-width: 400px;';
+        document.body.appendChild(successDiv);
+    }
+    successDiv.textContent = message;
+    successDiv.style.display = 'block';
+    
+    // Ocultar después de 3 segundos
+    setTimeout(() => {
+        successDiv.style.display = 'none';
+    }, 3000);
+}
+
+// Función para mostrar mensaje de error (si no existe)
+if (typeof showError === 'undefined') {
+    function showError(message) {
+        // Crear o actualizar mensaje de error
+        let errorDiv = document.getElementById('errorMessage');
+        if (!errorDiv) {
+            errorDiv = document.createElement('div');
+            errorDiv.id = 'errorMessage';
+            errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #d93025; color: white; padding: 16px 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 10001; max-width: 400px;';
+            document.body.appendChild(errorDiv);
+        }
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        
+        // Ocultar después de 5 segundos
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    }
+}
+
