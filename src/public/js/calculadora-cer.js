@@ -53,7 +53,10 @@ function agregarCupon() {
             <input type="text" class="input-table date-input fecha-inicio" id="fechaInicio${cuponCount}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
         </td>
         <td>
-            <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
+            <input type="text" class="input-table date-input fecha-fin-dev" id="fechaFinDev${cuponCount}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularFechasCER()" />
+        </td>
+        <td>
+            <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this); autocompletarFechaFinDev(this)" />
         </td>
         <td class="autocomplete-column">
             <input type="text" class="input-table date-input fecha-inicio-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
@@ -332,21 +335,65 @@ function calcular30_360European(inicio, fin) {
     return dias / 360;
 }
 
+// Autocompletar Fecha Fin Dev desde Fecha Liquidación (-1 día corrido)
+function autocompletarFechaFinDev(input) {
+    const row = input.closest('tr');
+    if (!row) return;
+    
+    const fechaLiquidacionInput = input;
+    const fechaFinDevInput = row.querySelector('.fecha-fin-dev');
+    
+    if (!fechaLiquidacionInput || !fechaFinDevInput) return;
+    
+    const fechaLiquidacion = fechaLiquidacionInput.value;
+    if (!fechaLiquidacion) {
+        fechaFinDevInput.value = '';
+        return;
+    }
+    
+    // Convertir fecha liquidación a formato YYYY-MM-DD
+    let fechaLiquidacionStr = fechaLiquidacion;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaLiquidacion)) {
+        fechaLiquidacionStr = convertirFechaDDMMAAAAaYYYYMMDD(fechaLiquidacion);
+    }
+    
+    const fechaLiquidacionDate = crearFechaDesdeString(fechaLiquidacionStr);
+    if (!fechaLiquidacionDate) return;
+    
+    // Calcular -1 día CORRIDO (no hábil) desde fecha liquidación
+    const fechaFinDev = new Date(fechaLiquidacionDate);
+    fechaFinDev.setDate(fechaFinDev.getDate() - 1);
+    
+    fechaFinDevInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(fechaFinDev));
+    console.log(`✅ autocompletarFechaFinDev - Fecha fin Dev autocompletada: ${formatearFechaInput(fechaFinDev)} (desde ${formatearFechaInput(fechaLiquidacionDate)} - 1 día corrido)`);
+}
+
 // Calcular Day Count Factor para una fila específica
 function calcularDayCountFactor(input) {
     const row = input.closest('tr');
     if (!row) return;
     
     const fechaInicioInput = row.querySelector('.fecha-inicio');
+    const fechaFinDevInput = row.querySelector('.fecha-fin-dev');
     const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
     const dayCountFactorInput = row.querySelector('.day-count-factor');
     
-    if (!fechaInicioInput || !fechaLiquidacionInput || !dayCountFactorInput) return;
+    if (!fechaInicioInput || !fechaFinDevInput || !fechaLiquidacionInput || !dayCountFactorInput) return;
     
     let fechaInicio = fechaInicioInput.value;
+    let fechaFinDev = fechaFinDevInput.value;
     let fechaLiquidacion = fechaLiquidacionInput.value;
     
-    if (!fechaInicio || !fechaLiquidacion) {
+    // Si no hay fechaFinDev, intentar autocompletarla desde fechaLiquidacion
+    if (!fechaFinDev || fechaFinDev.trim() === '') {
+        if (fechaLiquidacion) {
+            // Autocompletar fechaFinDev desde fechaLiquidacion - 1 día hábil
+            autocompletarFechaFinDev(fechaLiquidacionInput);
+            fechaFinDev = fechaFinDevInput.value;
+        }
+    }
+    
+    if (!fechaInicio || !fechaFinDev) {
         dayCountFactorInput.value = '';
         return;
     }
@@ -355,15 +402,27 @@ function calcularDayCountFactor(input) {
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaInicio)) {
         fechaInicio = convertirFechaDDMMAAAAaYYYYMMDD(fechaInicio);
     }
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaLiquidacion)) {
-        fechaLiquidacion = convertirFechaDDMMAAAAaYYYYMMDD(fechaLiquidacion);
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaFinDev)) {
+        fechaFinDev = convertirFechaDDMMAAAAaYYYYMMDD(fechaFinDev);
     }
+    
+    // Calcular fecha fin dev + 1 día CORRIDO (no hábil)
+    const fechaFinDevDate = crearFechaDesdeString(fechaFinDev);
+    if (!fechaFinDevDate) {
+        dayCountFactorInput.value = '';
+        return;
+    }
+    
+    // Sumar 1 día corrido (no hábil) a fecha fin dev
+    const fechaFinCalculo = new Date(fechaFinDevDate);
+    fechaFinCalculo.setDate(fechaFinCalculo.getDate() + 1);
     
     // Obtener tipo de interés (base) - por defecto 0 (30/360)
     const tipoInteresDias = parseInt(document.getElementById('tipoInteresDias')?.value) || 0;
     
     // Usar calcularFraccionAnio que ya implementa todas las bases correctamente
-    const factor = calcularFraccionAnio(fechaInicio, fechaLiquidacion, tipoInteresDias);
+    // Desde fecha inicio hasta fecha fin dev + 1 día corrido
+    const factor = calcularFraccionAnio(fechaInicio, formatearFechaInput(fechaFinCalculo), tipoInteresDias);
     dayCountFactorInput.value = factor.toFixed(12);
     
     // Recalcular renta nominal si hay renta TNA
@@ -2584,7 +2643,10 @@ async function autocompletarCupones() {
                     <input type="text" class="input-table date-input fecha-inicio" id="fechaInicio${cuponCount}" value="${fechaInicioDDMM}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
                 </td>
                 <td>
-                    <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionDDMM}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
+                    <input type="text" class="input-table date-input fecha-fin-dev" id="fechaFinDev${cuponCount}" value="" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularFechasCER()" />
+                </td>
+                <td>
+                    <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionDDMM}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this); autocompletarFechaFinDev(this)" />
                 </td>
                 <td>
                     <input type="text" class="input-table date-input fecha-inicio-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
@@ -2642,6 +2704,8 @@ async function autocompletarCupones() {
             const fechaInicioInput = row.querySelector('.fecha-inicio');
             const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
             if (fechaInicioInput && fechaLiquidacionInput && fechaInicioInput.value && fechaLiquidacionInput.value) {
+                // Autocompletar fecha fin dev desde fecha liquidación
+                autocompletarFechaFinDev(fechaLiquidacionInput);
                 calcularDayCountFactor(fechaLiquidacionInput);
                 calcularFechasCER();
                 
@@ -4335,7 +4399,10 @@ async function cargarCalculadora(titulo) {
                         <input type="text" class="input-table date-input fecha-inicio" id="fechaInicio${cuponCount}" value="${fechaInicioStr || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
                     </td>
                     <td>
-                        <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionStr || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
+                        <input type="text" class="input-table date-input fecha-fin-dev" id="fechaFinDev${cuponCount}" value="" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularFechasCER()" />
+                    </td>
+                    <td>
+                        <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionStr || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this); autocompletarFechaFinDev(this)" />
                     </td>
                     <td class="autocomplete-column">
                         <input type="text" class="input-table date-input fecha-inicio-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
@@ -4373,10 +4440,11 @@ async function cargarCalculadora(titulo) {
                     aplicarMascaraFecha(input);
                 });
                 
-                // Calcular Day Count Factor si hay fechas
+                // Autocompletar fecha fin dev y calcular Day Count Factor si hay fechas
                 const fechaInicioInput = row.querySelector('.fecha-inicio');
                 const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
                 if (fechaInicioInput && fechaLiquidacionInput && fechaInicioInput.value && fechaLiquidacionInput.value) {
+                    autocompletarFechaFinDev(fechaLiquidacionInput);
                     calcularDayCountFactor(fechaLiquidacionInput);
                 }
                 
@@ -4787,7 +4855,10 @@ function cargarDatosLocalStorage() {
                             <input type="text" class="input-table date-input fecha-inicio" id="fechaInicio${cuponCount}" value="${fechaInicioDDMM || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
                         </td>
                         <td>
-                            <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionDDMM || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this)" />
+                            <input type="text" class="input-table date-input fecha-fin-dev" id="fechaFinDev${cuponCount}" value="" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularFechasCER()" />
+                        </td>
+                        <td>
+                            <input type="text" class="input-table date-input fecha-liquidacion" id="fechaLiquidacion${cuponCount}" value="${fechaLiquidacionDDMM || ''}" placeholder="DD/MM/AAAA" maxlength="10" onchange="calcularDayCountFactor(this); autocompletarFechaFinDev(this)" />
                         </td>
                         <td class="autocomplete-column">
                             <input type="text" class="input-table date-input fecha-inicio-cer" readonly placeholder="DD/MM/AAAA" maxlength="10" />
@@ -4847,11 +4918,13 @@ function cargarDatosLocalStorage() {
                         aplicarMascaraFecha(input);
                     });
                     
-                    // Calcular Day Count Factor si hay fechas
+                    // Autocompletar fecha fin dev y calcular Day Count Factor si hay fechas
                     const fechaInicioInput = row.querySelector('.fecha-inicio');
                     const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
                     if (fechaInicioInput && fechaLiquidacionInput && fechaInicioInput.value && fechaLiquidacionInput.value) {
+                        autocompletarFechaFinDev(fechaLiquidacionInput);
                         calcularDayCountFactor(fechaLiquidacionInput);
+                        calcularFechasCER();
                     }
                     
                     // Recalcular renta nominal después de cargar renta TNA y valor residual
@@ -5261,6 +5334,37 @@ document.addEventListener('DOMContentLoaded', () => {
             timeoutGuardar = setTimeout(() => {
                 guardarDatosLocalStorage();
             }, 500);
+        });
+        
+        // Event delegation para refrescar intervalos cuando cambien fechas de inicio/liquidación en cupones
+        // Listener para cambios en fecha-inicio de cupones
+        cashflowBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('fecha-inicio') && e.target.closest('tr[data-tipo="cupon"]')) {
+                console.log('🔄 Fecha inicio de cupón cambió, recalculando intervalos');
+                setTimeout(() => {
+                    calcularFechasCER();
+                }, 100);
+            }
+        });
+        
+        // Listener para cambios en fecha-liquidacion de cupones
+        cashflowBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('fecha-liquidacion') && e.target.closest('tr[data-tipo="cupon"]')) {
+                console.log('🔄 Fecha liquidación de cupón cambió, recalculando intervalos');
+                setTimeout(() => {
+                    calcularFechasCER();
+                }, 100);
+            }
+        });
+        
+        // Listener para cambios en fecha-fin-dev de cupones (recalcular day count factor)
+        cashflowBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('fecha-fin-dev') && e.target.closest('tr[data-tipo="cupon"]')) {
+                console.log('🔄 Fecha fin dev de cupón cambió, recalculando day count factor');
+                setTimeout(() => {
+                    calcularDayCountFactor(e.target);
+                }, 100);
+            }
         });
     }
     

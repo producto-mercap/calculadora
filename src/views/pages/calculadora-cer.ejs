@@ -75,6 +75,7 @@
                                 <tr>
                                     <th style="width: 30px; min-width: 30px;">Cupón</th>
                                     <th title="Fecha de inicio del cupón">Fecha<br>Inicio</th>
+                                    <th title="Fecha fin devengamiento (fecha liquidación - 1 día corrido)">Fecha<br>Fin Dev</th>
                                     <th title="Fecha de liquidación del cupón">Fecha<br>Liquid.</th>
                                     <th class="autocomplete-column" title="Fecha inicio - 10 días hábiles">Inicio<br>Intervalo</th>
                                     <th class="autocomplete-column" title="Fecha liquidación - intervalo fin días hábiles">Final<br>Intervalo</th>
@@ -104,6 +105,9 @@
                                 <!-- Fila de inversión inicial -->
                                 <tr class="inversion-row" data-tipo="inversion">
                                     <td style="text-align: center; font-weight: 600; color: var(--text-secondary);">-</td>
+                                    <td>
+                                        <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
+                                    </td>
                                     <td>
                                         <input type="text" class="input-table date-input" disabled placeholder="DD/MM/AAAA" maxlength="10" />
                                     </td>

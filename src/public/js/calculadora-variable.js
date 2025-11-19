@@ -699,17 +699,12 @@ function autocompletarFechaFinDev(input) {
     const fechaLiquidacionDate = crearFechaDesdeString(fechaLiquidacionStr);
     if (!fechaLiquidacionDate) return;
     
-    // Calcular -1 día hábil desde fecha liquidación
-    // Usar todos los feriados del cache
-    const feriadosAUsar = cacheFeriados || [];
-    const fechaFinDev = calcularFechaConDiasHabiles(fechaLiquidacionDate, -1, feriadosAUsar);
+    // Calcular -1 día CORRIDO (no hábil) desde fecha liquidación
+    const fechaFinDev = new Date(fechaLiquidacionDate);
+    fechaFinDev.setDate(fechaFinDev.getDate() - 1);
     
-    if (fechaFinDev) {
-        fechaFinDevInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(fechaFinDev));
-        console.log(`✅ autocompletarFechaFinDev - Fecha fin Dev autocompletada: ${formatearFechaInput(fechaFinDev)} (desde ${formatearFechaInput(fechaLiquidacionDate)} - 1 día hábil)`);
-    } else {
-        console.warn(`⚠️ autocompletarFechaFinDev - No se pudo calcular fecha fin dev`);
-    }
+    fechaFinDevInput.value = convertirFechaYYYYMMDDaDDMMAAAA(formatearFechaInput(fechaFinDev));
+    console.log(`✅ autocompletarFechaFinDev - Fecha fin Dev autocompletada: ${formatearFechaInput(fechaFinDev)} (desde ${formatearFechaInput(fechaLiquidacionDate)} - 1 día corrido)`);
 }
 
 function calcularDayCountFactor(input) {
@@ -721,15 +716,26 @@ function calcularDayCountFactor(input) {
     if (!row) return;
     
     const fechaInicioInput = row.querySelector('.fecha-inicio');
+    const fechaFinDevInput = row.querySelector('.fecha-fin-dev');
     const fechaLiquidacionInput = row.querySelector('.fecha-liquidacion');
     const dayCountFactorInput = row.querySelector('.day-count-factor');
     
-    if (!fechaInicioInput || !fechaLiquidacionInput || !dayCountFactorInput) return;
+    if (!fechaInicioInput || !fechaFinDevInput || !fechaLiquidacionInput || !dayCountFactorInput) return;
     
     let fechaInicio = fechaInicioInput.value;
+    let fechaFinDev = fechaFinDevInput.value;
     let fechaLiquidacion = fechaLiquidacionInput.value;
     
-    if (!fechaInicio || !fechaLiquidacion) {
+    // Si no hay fechaFinDev, intentar autocompletarla desde fechaLiquidacion
+    if (!fechaFinDev || fechaFinDev.trim() === '') {
+        if (fechaLiquidacion) {
+            // Autocompletar fechaFinDev desde fechaLiquidacion - 1 día corrido
+            autocompletarFechaFinDev(fechaLiquidacionInput);
+            fechaFinDev = fechaFinDevInput.value;
+        }
+    }
+    
+    if (!fechaInicio || !fechaFinDev) {
         dayCountFactorInput.value = '';
         return;
     }
@@ -738,15 +744,27 @@ function calcularDayCountFactor(input) {
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaInicio)) {
         fechaInicio = convertirFechaDDMMAAAAaYYYYMMDD(fechaInicio);
     }
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaLiquidacion)) {
-        fechaLiquidacion = convertirFechaDDMMAAAAaYYYYMMDD(fechaLiquidacion);
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaFinDev)) {
+        fechaFinDev = convertirFechaDDMMAAAAaYYYYMMDD(fechaFinDev);
     }
+    
+    // Calcular fecha fin dev + 1 día CORRIDO (no hábil)
+    const fechaFinDevDate = crearFechaDesdeString(fechaFinDev);
+    if (!fechaFinDevDate) {
+        dayCountFactorInput.value = '';
+        return;
+    }
+    
+    // Sumar 1 día corrido (no hábil) a fecha fin dev
+    const fechaFinCalculo = new Date(fechaFinDevDate);
+    fechaFinCalculo.setDate(fechaFinCalculo.getDate() + 1);
     
     // Obtener tipo de interés (base) - por defecto 0 (30/360)
     const tipoInteresDias = parseInt(document.getElementById('tipoInteresDias')?.value) || 0;
     
     // Usar calcularFraccionAnio que ya implementa todas las bases correctamente
-    const factor = calcularFraccionAnio(fechaInicio, fechaLiquidacion, tipoInteresDias);
+    // Desde fecha inicio hasta fecha fin dev + 1 día corrido
+    const factor = calcularFraccionAnio(fechaInicio, formatearFechaInput(fechaFinCalculo), tipoInteresDias);
     dayCountFactorInput.value = factor.toFixed(12);
     
     // Verificar si fecha inicio > fecha valuación y replicar renta TNA del cupón anterior
@@ -5740,6 +5758,27 @@ document.addEventListener('DOMContentLoaded', () => {
             timeoutGuardar = setTimeout(() => {
                 guardarDatosLocalStorage();
             }, 500);
+        });
+        
+        // Event delegation para refrescar intervalos cuando cambien fechas de inicio/liquidación en cupones
+        // Listener para cambios en fecha-inicio de cupones
+        cashflowBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('fecha-inicio') && e.target.closest('tr[data-tipo="cupon"]')) {
+                console.log('🔄 Fecha inicio de cupón cambió, recalculando intervalos');
+                setTimeout(() => {
+                    calcularFechasCER();
+                }, 100);
+            }
+        });
+        
+        // Listener para cambios en fecha-liquidacion de cupones
+        cashflowBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('fecha-liquidacion') && e.target.closest('tr[data-tipo="cupon"]')) {
+                console.log('🔄 Fecha liquidación de cupón cambió, recalculando intervalos');
+                setTimeout(() => {
+                    calcularFechasCER();
+                }, 100);
+            }
         });
     }
     
